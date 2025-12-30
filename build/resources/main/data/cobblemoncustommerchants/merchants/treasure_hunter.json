@@ -1,0 +1,28 @@
+{
+  "display_name": "Treasure Hunter",
+  "player_skin_name": "Dausky_",
+  "trades": [
+    {
+      "input": {
+        "id": "cobblemon:relic_coin_pouch",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemon:relic_coin",
+        "count": 5
+      },
+      "max_uses": 2147483647
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin_sack",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "max_uses": 2147483647
+    }
+  ]
+}

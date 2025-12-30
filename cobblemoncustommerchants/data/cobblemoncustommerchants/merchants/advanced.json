@@ -1,0 +1,72 @@
+{
+  "display_name": "Advanced Merchant",
+  "player_skin_name": "Fit_",
+  "trades": [
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 3
+      },
+      "output": {
+        "id": "cobblemon:great_ball",
+        "count": 1
+      },
+      "max_uses": 2147483647
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 5
+      },
+      "output": {
+        "id": "cobblemon:ultra_ball",
+        "count": 1
+      },
+      "max_uses": 2147483647
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 3
+      },
+      "output": {
+        "id": "cobblemon:super_potion",
+        "count": 1
+      },
+      "max_uses": 2147483647
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 5
+      },
+      "output": {
+        "id": "cobblemon:hyper_potion",
+        "count": 1
+      },
+      "max_uses": 2147483647
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 10
+      },
+      "output": {
+        "id": "cobblemon:max_potion",
+        "count": 1
+      },
+      "max_uses": 2147483647
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 8
+      },
+      "output": {
+        "id": "cobblemon:full_heal",
+        "count": 1
+      },
+      "max_uses": 2147483647
+    }
+  ]
+}

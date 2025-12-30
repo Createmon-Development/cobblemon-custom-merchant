@@ -1,0 +1,72 @@
+{
+  "display_name": "Gambler",
+  "player_skin_name": "aracekarr",
+  "trades": [
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 50
+      },
+      "output": {
+        "id": "cobblemon:rare_candy",
+        "count": 1
+      },
+      "max_uses": 10
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 25
+      },
+      "output": {
+        "id": "cobblemon:exp_candy_xl",
+        "count": 1
+      },
+      "max_uses": 20
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 100
+      },
+      "output": {
+        "id": "cobblemon:master_ball",
+        "count": 1
+      },
+      "max_uses": 3
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 75
+      },
+      "output": {
+        "id": "cobblemon:ability_capsule",
+        "count": 1
+      },
+      "max_uses": 5
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 150
+      },
+      "output": {
+        "id": "cobblemon:ability_patch",
+        "count": 1
+      },
+      "max_uses": 2
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 40
+      },
+      "output": {
+        "id": "cobblemon:exp_candy_l",
+        "count": 3
+      },
+      "max_uses": 15
+    }
+  ]
+}

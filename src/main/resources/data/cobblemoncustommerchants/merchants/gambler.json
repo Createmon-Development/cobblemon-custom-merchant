@@ -1,0 +1,39 @@
+{
+  "display_name": "Gambler",
+  "player_skin_name": "aracekarr",
+  "trades": [
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 10
+      },
+      "output": {
+        "id": "cobblemonpokeboxes:pokeball_pokebox",
+        "count": 1
+      },
+      "max_uses": 10
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 25
+      },
+      "output": {
+        "id": "cobblemonpokeboxes:greatball_pokebox",
+        "count": 1
+      },
+      "max_uses": 10
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 5
+      },
+      "output": {
+        "id": "simplehats:hatbag_festive",
+        "count": 1
+      },
+      "max_uses": 20
+    }
+  ]
+}
