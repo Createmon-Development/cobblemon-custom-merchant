@@ -42,22 +42,41 @@ public class SpawnMerchantCommand {
                     .executes(SpawnMerchantCommand::spawnMerchant)
                     .then(Commands.argument("player_skin_name", StringArgumentType.word())
                         .executes(SpawnMerchantCommand::spawnMerchantWithSkin)
+                        .then(Commands.argument("villager_biome", StringArgumentType.word())
+                            .executes(SpawnMerchantCommand::spawnMerchantWithBiome)
+                            .then(Commands.argument("villager_profession", StringArgumentType.word())
+                                .executes(SpawnMerchantCommand::spawnMerchantWithProfession)
+                            )
+                        )
                     )
                 )
         );
     }
 
     private static int spawnMerchant(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        return spawnMerchantInternal(context, null);
+        return spawnMerchantInternal(context, null, null, null);
     }
 
     private static int spawnMerchantWithSkin(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         String skinName = StringArgumentType.getString(context, "player_skin_name");
-        return spawnMerchantInternal(context, skinName);
+        return spawnMerchantInternal(context, skinName, null, null);
     }
 
-    private static int spawnMerchantInternal(CommandContext<CommandSourceStack> context, String overrideSkinName)
-            throws CommandSyntaxException {
+    private static int spawnMerchantWithBiome(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String skinName = StringArgumentType.getString(context, "player_skin_name");
+        String biome = StringArgumentType.getString(context, "villager_biome");
+        return spawnMerchantInternal(context, skinName, biome, null);
+    }
+
+    private static int spawnMerchantWithProfession(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String skinName = StringArgumentType.getString(context, "player_skin_name");
+        String biome = StringArgumentType.getString(context, "villager_biome");
+        String profession = StringArgumentType.getString(context, "villager_profession");
+        return spawnMerchantInternal(context, skinName, biome, profession);
+    }
+
+    private static int spawnMerchantInternal(CommandContext<CommandSourceStack> context, String overrideSkinName,
+            String overrideBiome, String overrideProfession) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         ResourceLocation merchantTypeId = ResourceLocationArgument.getId(context, "merchant_type");
         ServerLevel level = source.getLevel();
@@ -69,6 +88,11 @@ public class SpawnMerchantCommand {
             source.sendFailure(Component.literal("Unknown merchant type: " + merchantTypeId));
             return 0;
         }
+
+        // Treat "-" as placeholder (use config default)
+        if ("-".equals(overrideSkinName)) overrideSkinName = null;
+        if ("-".equals(overrideBiome)) overrideBiome = null;
+        if ("-".equals(overrideProfession)) overrideProfession = null;
 
         // Create merchant entity
         CustomMerchantEntity merchant = new CustomMerchantEntity(ModEntities.CUSTOM_MERCHANT.get(), level);
@@ -85,6 +109,14 @@ public class SpawnMerchantCommand {
         String skinName = overrideSkinName != null ? overrideSkinName : config.playerSkinName().orElse("");
         merchant.setPlayerSkinName(skinName);
 
+        // Set villager biome (use override if provided, otherwise use config, default to plains)
+        String biome = overrideBiome != null ? overrideBiome : config.villagerBiome().orElse("plains");
+        merchant.setVillagerBiome(biome);
+
+        // Set villager profession (use override if provided, otherwise use config, default to none)
+        String profession = overrideProfession != null ? overrideProfession : config.villagerProfession().orElse("none");
+        merchant.setVillagerProfession(profession);
+
         // Set merchant type based on ID
         if (merchantTypeId.equals(ResourceLocation.fromNamespaceAndPath("cobblemoncustommerchants", "black_market"))) {
             merchant.setMerchantType(CustomMerchantEntity.MerchantType.BLACK_MARKET);
@@ -97,6 +129,9 @@ public class SpawnMerchantCommand {
 
         // Store the trader ID for future reference
         merchant.setTraderId(merchantTypeId);
+
+        // Reload trades to populate tradeEntries list
+        merchant.reloadTradesFromConfig();
 
         // Spawn the merchant
         level.addFreshEntity(merchant);

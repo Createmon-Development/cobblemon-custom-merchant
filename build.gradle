@@ -14,6 +14,17 @@ group = mod_group_id
 
 repositories {
     mavenLocal()
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+    }
+    maven {
+        url = "https://maven.impactdev.net/repository/development/"
+    }
+    maven {
+        name = "Kotlin for Forge"
+        url = "https://thedarkcolour.github.io/KotlinForForge/"
+    }
 }
 
 base {
@@ -72,9 +83,11 @@ configurations {
 }
 
 dependencies {
-    // Cobblemon dependencies for merchant functionality
-    compileOnly files("../cobblemon-main/common/build/libs/common-1.7.1+1.21.1-transformProductionNeoForge.jar")
-    compileOnly files("../cobblemon-main/neoforge/build/libs/Cobblemon-neoforge-1.7.1+1.21.1.jar")
+    // Kotlin for Forge - required by Cobblemon
+    implementation "thedarkcolour:kotlinforforge-neoforge:5.6.0"
+
+    // Cobblemon dependency from Modrinth
+    implementation "com.cobblemon:neoforge:1.7.1+1.21.1"
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {

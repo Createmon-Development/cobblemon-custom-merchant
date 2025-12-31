@@ -22,14 +22,37 @@ import org.jetbrains.annotations.NotNull;
 public class MerchantTradeMenu extends AbstractContainerMenu {
     private final CustomMerchantEntity merchant;
     private MerchantOffers offers;
+    private java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries;
     private final int merchantId;
     private int lastOfferCount = -1; // Start at -1 to trigger initial sync
+    private boolean needsSync = false; // Flag to force sync after trade
 
     // Constructor for client side
     public MerchantTradeMenu(int containerId, Inventory playerInventory, FriendlyByteBuf extraData) {
         super(ModMenuTypes.MERCHANT_TRADE_MENU.get(), containerId);
         this.merchantId = extraData.readInt();
-        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Creating menu for merchant ID: {}", merchantId);
+
+        // Read synced trade entries from packet
+        net.minecraft.network.RegistryFriendlyByteBuf registryBuf = (net.minecraft.network.RegistryFriendlyByteBuf) extraData;
+        int tradeEntryCount = extraData.readInt();
+        this.tradeEntries = new java.util.ArrayList<>();
+        for (int i = 0; i < tradeEntryCount; i++) {
+            net.fit.cobblemonmerchants.merchant.config.ItemRequirement input =
+                extraData.readJsonWithCodec(net.fit.cobblemonmerchants.merchant.config.ItemRequirement.CODEC);
+            java.util.Optional<net.fit.cobblemonmerchants.merchant.config.ItemRequirement> secondInput =
+                extraData.readBoolean() ? java.util.Optional.of(extraData.readJsonWithCodec(net.fit.cobblemonmerchants.merchant.config.ItemRequirement.CODEC)) : java.util.Optional.empty();
+            ItemStack output = ItemStack.STREAM_CODEC.decode(registryBuf);
+            int maxUses = extraData.readInt();
+            int villagerXp = extraData.readInt();
+            float priceMultiplier = extraData.readFloat();
+
+            this.tradeEntries.add(new net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry(
+                input, secondInput, output, maxUses, villagerXp, priceMultiplier
+            ));
+        }
+
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Received {} trade entries from server", this.tradeEntries.size());
+
         // Try to get the merchant from the world
         if (playerInventory.player.level().getEntity(merchantId) instanceof CustomMerchantEntity entity) {
             this.merchant = entity;
@@ -50,6 +73,7 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         this.merchant = merchant;
         this.merchantId = merchant != null ? merchant.getId() : -1;
         this.offers = merchant != null ? merchant.getOffers() : new MerchantOffers();
+        this.tradeEntries = merchant != null ? merchant.getTradeEntries() : new java.util.ArrayList<>();
         // Keep lastOfferCount at -1 to trigger sync in broadcastChanges
         net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("SERVER: Creating menu for merchant ID: {}, offers size: {}",
             merchantId, this.offers.size());
@@ -89,6 +113,10 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         return merchant;
     }
 
+    public java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> getTradeEntries() {
+        return tradeEntries;
+    }
+
     /**
      * Attempt to execute a trade at the given index
      * Returns true if the trade was successful
@@ -103,35 +131,47 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             return false;
         }
 
-        // Check if player has the required items
-        ItemStack costA = offer.getItemCostA().itemStack();
-        ItemStack costB = offer.getCostB();
+        // Get the original trade entry for tag-based validation
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry tradeEntry =
+            tradeIndex < tradeEntries.size() ? tradeEntries.get(tradeIndex) : null;
 
-        // Count how many of each item the player has
+        if (tradeEntry == null) {
+            // Fallback to vanilla validation for trades without TradeEntry (e.g., Black Market)
+            return executeTradeLegacy(tradeIndex, player, offer);
+        }
+
+        // Count how many of each required item the player has
+        net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq = tradeEntry.input();
         int countA = 0;
-        int countB = 0;
-
         for (ItemStack stack : player.getInventory().items) {
-            if (ItemStack.isSameItemSameComponents(stack, costA)) {
+            if (inputReq.matches(stack)) {
                 countA += stack.getCount();
             }
-            if (!costB.isEmpty() && ItemStack.isSameItemSameComponents(stack, costB)) {
-                countB += stack.getCount();
+        }
+
+        int countB = 0;
+        if (tradeEntry.secondInput().isPresent()) {
+            net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondInputReq = tradeEntry.secondInput().get();
+            for (ItemStack stack : player.getInventory().items) {
+                if (secondInputReq.matches(stack)) {
+                    countB += stack.getCount();
+                }
             }
         }
 
         // Check if player has enough items
-        if (countA < costA.getCount()) {
+        if (countA < inputReq.getCount()) {
             return false;
         }
-        if (!costB.isEmpty() && countB < costB.getCount()) {
+        if (tradeEntry.secondInput().isPresent() && countB < tradeEntry.secondInput().get().getCount()) {
             return false;
         }
 
         // Remove the cost items from player inventory
-        removeItems(player.getInventory(), costA, costA.getCount());
-        if (!costB.isEmpty()) {
-            removeItems(player.getInventory(), costB, costB.getCount());
+        removeItemsMatching(player.getInventory(), inputReq, inputReq.getCount());
+        if (tradeEntry.secondInput().isPresent()) {
+            removeItemsMatching(player.getInventory(), tradeEntry.secondInput().get(),
+                tradeEntry.secondInput().get().getCount());
         }
 
         // Give the player the result item
@@ -144,7 +184,68 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         // Update the offer usage
         offer.increaseUses();
 
+        // Mark for sync on next broadcastChanges
+        needsSync = true;
+
         return true;
+    }
+
+    // Legacy validation for trades without TradeEntry (Black Market, etc.)
+    private boolean executeTradeLegacy(int tradeIndex, Player player, MerchantOffer offer) {
+        ItemStack costA = offer.getItemCostA().itemStack();
+        ItemStack costB = offer.getCostB();
+
+        int countA = 0;
+        int countB = 0;
+
+        for (ItemStack stack : player.getInventory().items) {
+            if (ItemStack.isSameItemSameComponents(stack, costA)) {
+                countA += stack.getCount();
+            }
+            if (!costB.isEmpty() && ItemStack.isSameItemSameComponents(stack, costB)) {
+                countB += stack.getCount();
+            }
+        }
+
+        if (countA < costA.getCount()) {
+            return false;
+        }
+        if (!costB.isEmpty() && countB < costB.getCount()) {
+            return false;
+        }
+
+        removeItems(player.getInventory(), costA, costA.getCount());
+        if (!costB.isEmpty()) {
+            removeItems(player.getInventory(), costB, costB.getCount());
+        }
+
+        ItemStack result = offer.getResult().copy();
+        if (!player.getInventory().add(result)) {
+            player.drop(result, false);
+        }
+
+        offer.increaseUses();
+
+        // Mark for sync on next broadcastChanges
+        needsSync = true;
+
+        return true;
+    }
+
+    /**
+     * Removes items matching the ItemRequirement from inventory
+     */
+    private void removeItemsMatching(Inventory inventory, net.fit.cobblemonmerchants.merchant.config.ItemRequirement requirement, int count) {
+        int remaining = count;
+
+        for (int i = 0; i < inventory.items.size() && remaining > 0; i++) {
+            ItemStack stack = inventory.items.get(i);
+            if (requirement.matches(stack)) {
+                int removeCount = Math.min(remaining, stack.getCount());
+                stack.shrink(removeCount);
+                remaining -= removeCount;
+            }
+        }
     }
 
     /**
@@ -189,14 +290,17 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     public void broadcastChanges() {
         super.broadcastChanges();
 
-        // Sync offers to client when they change or on first broadcast (lastOfferCount == -1)
+        // Sync offers to client when they change, after trades, or on first broadcast
         if (merchant != null) {
             MerchantOffers currentOffers = merchant.getOffers();
-            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("SERVER: broadcastChanges called, offers: {}, lastCount: {}", currentOffers.size(), lastOfferCount);
-            if (currentOffers.size() != lastOfferCount) {
-                // Send BEFORE updating lastOfferCount
+            boolean shouldSync = needsSync || currentOffers.size() != lastOfferCount;
+
+            if (shouldSync) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("SERVER: Syncing offers - count: {}, needsSync: {}",
+                    currentOffers.size(), needsSync);
                 sendOffersToPlayers();
                 lastOfferCount = currentOffers.size();
+                needsSync = false;
             }
         }
     }

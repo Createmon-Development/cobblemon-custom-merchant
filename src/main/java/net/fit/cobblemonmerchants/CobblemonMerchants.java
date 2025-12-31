@@ -116,7 +116,7 @@ public class CobblemonMerchants {
         public static void registerEntityRenderers(net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
             event.registerEntityRenderer(
                 net.fit.cobblemonmerchants.merchant.ModEntities.CUSTOM_MERCHANT.get(),
-                net.fit.cobblemonmerchants.merchant.client.CustomMerchantRenderer::new
+                ctx -> new net.minecraft.client.renderer.entity.VillagerRenderer(ctx)
             );
         }
 

@@ -1,0 +1,29 @@
+
+# NixOS development environment
+flake.nix
+flake.lock
+
+# Gradle
+.gradle/
+build/
+out/
+run/
+
+# Eclipse
+.settings/
+bin/
+.classpath
+.project
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VSCode
+.vscode/
+
+# Minecraft development
+logs/
+crash-reports/

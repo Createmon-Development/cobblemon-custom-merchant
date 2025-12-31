@@ -18,6 +18,11 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.VillagerData;
+import net.minecraft.world.entity.npc.VillagerDataHolder;
+import net.minecraft.world.entity.npc.VillagerProfession;
+import net.minecraft.world.entity.npc.VillagerType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
@@ -25,14 +30,16 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Custom merchant entity that looks like a player with custom trades.
- * This entity is immobile, invincible, and untargetable.
- * Supports both regular traders (with JSON-defined trades) and Black Market merchants (with dynamic rotating inventory).
+ * Custom merchant entity with Hypixel Skyblock-style chest GUI.
+ * Displays result items in chest; tooltips show cost. Supports item tag matching.
+ * Immobile, invincible, untargetable.
  */
-public class CustomMerchantEntity extends PathfinderMob {
+public class CustomMerchantEntity extends Villager {
     private static final String TAG_TRADER_ID = "TraderId";
     private static final String TAG_MERCHANT_TYPE = "MerchantType";
     private static final String TAG_PLAYER_SKIN_NAME = "PlayerSkinName";
+    private static final String TAG_VILLAGER_BIOME = "VillagerBiome";
+    private static final String TAG_VILLAGER_PROFESSION = "VillagerProfession";
     private static final String TAG_OFFERS = "Offers";
 
     private static final EntityDataAccessor<String> DATA_PLAYER_SKIN_NAME =
@@ -41,9 +48,10 @@ public class CustomMerchantEntity extends PathfinderMob {
     private ResourceLocation traderId;
     private MerchantType merchantType = MerchantType.REGULAR;
     private MerchantOffers offers = new MerchantOffers();
+    private java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries = new java.util.ArrayList<>();
     private Player tradingPlayer;
 
-    public CustomMerchantEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
+    public CustomMerchantEntity(EntityType<? extends Villager> entityType, Level level) {
         super(entityType, level);
     }
 
@@ -85,6 +93,61 @@ public class CustomMerchantEntity extends PathfinderMob {
         return this.entityData.get(DATA_PLAYER_SKIN_NAME);
     }
 
+    public void setVillagerBiome(String biome) {
+        VillagerType type;
+        try {
+            ResourceLocation typeId = biome.contains(":")
+                ? ResourceLocation.parse(biome)
+                : ResourceLocation.withDefaultNamespace(biome);
+            type = net.minecraft.core.registries.BuiltInRegistries.VILLAGER_TYPE.get(typeId);
+            if (type == null) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn("Unknown villager type: {}, defaulting to plains", typeId);
+                type = VillagerType.PLAINS;
+            }
+        } catch (Exception e) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.error("Error parsing villager type: {}", biome, e);
+            type = VillagerType.PLAINS;
+        }
+        VillagerData current = getVillagerData();
+        VillagerData newData = new VillagerData(type, current.getProfession(), current.getLevel());
+        setVillagerData(newData);
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Set villager biome to {} (type: {})", biome, type);
+    }
+
+    public String getVillagerBiome() {
+        ResourceLocation typeId = net.minecraft.core.registries.BuiltInRegistries.VILLAGER_TYPE
+            .getKey(getVillagerData().getType());
+        return typeId != null ? typeId.getPath() : "plains";
+    }
+
+    public void setVillagerProfession(String profession) {
+        VillagerProfession prof;
+        try {
+            // Handle both "mason" and "minecraft:mason" formats
+            ResourceLocation profId = profession.contains(":")
+                ? ResourceLocation.parse(profession)
+                : ResourceLocation.withDefaultNamespace(profession);
+            prof = net.minecraft.core.registries.BuiltInRegistries.VILLAGER_PROFESSION.get(profId);
+            if (prof == null) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn("Unknown villager profession: {}, defaulting to none", profId);
+                prof = VillagerProfession.NONE;
+            }
+        } catch (Exception e) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.error("Error parsing villager profession: {}", profession, e);
+            prof = VillagerProfession.NONE;
+        }
+        VillagerData current = getVillagerData();
+        VillagerData newData = new VillagerData(current.getType(), prof, current.getLevel());
+        setVillagerData(newData);
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Set villager profession to {} (profession: {})", profession, prof);
+    }
+
+    public String getVillagerProfession() {
+        ResourceLocation profId = net.minecraft.core.registries.BuiltInRegistries.VILLAGER_PROFESSION
+            .getKey(getVillagerData().getProfession());
+        return profId != null ? profId.getPath() : "none";
+    }
+
     public void setTradingPlayer(Player player) {
         this.tradingPlayer = player;
     }
@@ -100,25 +163,38 @@ public class CustomMerchantEntity extends PathfinderMob {
     public MerchantOffers getOffers() {
         // For Black Market merchants, generate dynamic per-player inventory
         if (this.merchantType == MerchantType.BLACK_MARKET && this.tradingPlayer != null) {
-            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("===== BLACK MARKET getOffers() called for player: {} =====", this.tradingPlayer.getName().getString());
             if (this.level() instanceof ServerLevel serverLevel) {
                 BlackMarketInventory inventory = BlackMarketInventory.get(serverLevel);
-                MerchantOffers blackMarketOffers = inventory.getOffersForPlayer(
+                return inventory.getOffersForPlayer(
                     this.tradingPlayer.getUUID(),
                     serverLevel.getDayTime()
                 );
-                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Returning {} offers", blackMarketOffers.size());
-                return blackMarketOffers;
             }
         }
-
-        // For regular merchants, use the stored offers
         return this.offers;
+    }
+
+    public java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> getTradeEntries() {
+        return this.tradeEntries;
     }
 
     @Override
     protected void registerGoals() {
         // No AI goals - the entity should not move or have any behavior
+        // Clear all goals that vanilla Villager adds
+        this.goalSelector.removeAllGoals(goal -> true);
+        this.targetSelector.removeAllGoals(goal -> true);
+    }
+
+    @Override
+    protected void customServerAiStep() {
+        // Don't call super - prevents villager from running AI that changes profession
+    }
+
+    @Override
+    public void tick() {
+        // Call Entity.tick() directly, skip Villager.tick() to prevent profession changes
+        super.baseTick();
     }
 
     @Override
@@ -134,7 +210,7 @@ public class CustomMerchantEntity extends PathfinderMob {
             }
         }
 
-        // Open trading GUI when player interacts (right-clicks) with the merchant
+        // Open custom chest-style trading GUI
         if (!this.level().isClientSide && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             this.setTradingPlayer(player);
             openCustomTradeScreen(serverPlayer);
@@ -143,11 +219,9 @@ public class CustomMerchantEntity extends PathfinderMob {
     }
 
     /**
-     * Opens the custom chest-style trading screen
+     * Opens Hypixel Skyblock-style chest trading screen
      */
     private void openCustomTradeScreen(net.minecraft.server.level.ServerPlayer serverPlayer) {
-        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Opening custom trade screen for player: {}", serverPlayer.getName().getString());
-
         serverPlayer.openMenu(new net.minecraft.world.MenuProvider() {
             @Override
             public @NotNull Component getDisplayName() {
@@ -161,7 +235,22 @@ public class CustomMerchantEntity extends PathfinderMob {
                 return new net.fit.cobblemonmerchants.merchant.menu.MerchantTradeMenu(
                     containerId, playerInventory, CustomMerchantEntity.this);
             }
-        }, buf -> buf.writeInt(this.getId()));
+        }, buf -> {
+            buf.writeInt(this.getId());
+            // Sync trade entries to client
+            buf.writeInt(tradeEntries.size());
+            for (net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry : tradeEntries) {
+                buf.writeJsonWithCodec(net.fit.cobblemonmerchants.merchant.config.ItemRequirement.CODEC, entry.input());
+                buf.writeBoolean(entry.secondInput().isPresent());
+                if (entry.secondInput().isPresent()) {
+                    buf.writeJsonWithCodec(net.fit.cobblemonmerchants.merchant.config.ItemRequirement.CODEC, entry.secondInput().get());
+                }
+                net.minecraft.world.item.ItemStack.STREAM_CODEC.encode(buf, entry.output());
+                buf.writeInt(entry.maxUses());
+                buf.writeInt(entry.villagerXp());
+                buf.writeFloat(entry.priceMultiplier());
+            }
+        });
     }
 
     @Override
@@ -242,6 +331,9 @@ public class CustomMerchantEntity extends PathfinderMob {
         if (!skinName.isEmpty()) {
             tag.putString(TAG_PLAYER_SKIN_NAME, skinName);
         }
+        VillagerData.CODEC.encodeStart(this.registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), getVillagerData())
+            .resultOrPartial(error -> net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.error("Failed to save villager data: {}", error))
+            .ifPresent(data -> tag.put("VillagerData", data));
 
         // Save offers for regular merchants
         if (this.merchantType == MerchantType.REGULAR && !this.offers.isEmpty()) {
@@ -270,6 +362,19 @@ public class CustomMerchantEntity extends PathfinderMob {
         }
         if (tag.contains(TAG_PLAYER_SKIN_NAME)) {
             setPlayerSkinName(tag.getString(TAG_PLAYER_SKIN_NAME));
+        }
+        if (tag.contains("VillagerData")) {
+            VillagerData.CODEC.parse(this.registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), tag.get("VillagerData"))
+                .resultOrPartial(error -> net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.error("Failed to load villager data: {}", error))
+                .ifPresent(this::setVillagerData);
+        } else {
+            // Legacy support: load from old string format
+            if (tag.contains(TAG_VILLAGER_BIOME)) {
+                setVillagerBiome(tag.getString(TAG_VILLAGER_BIOME));
+            }
+            if (tag.contains(TAG_VILLAGER_PROFESSION)) {
+                setVillagerProfession(tag.getString(TAG_VILLAGER_PROFESSION));
+            }
         }
 
         // Load offers from saved NBT
@@ -306,6 +411,7 @@ public class CustomMerchantEntity extends PathfinderMob {
 
         if (config != null) {
             this.offers = config.toMerchantOffers();
+            this.tradeEntries = new java.util.ArrayList<>(config.trades());
             net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Reloaded {} trades for merchant: {}",
                 this.offers.size(), this.traderId);
         } else {

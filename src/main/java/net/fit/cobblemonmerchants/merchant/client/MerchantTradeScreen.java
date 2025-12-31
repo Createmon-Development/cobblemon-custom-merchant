@@ -104,7 +104,8 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
             MerchantOffers offers = menu.getOffers();
             if (hoveredTradeIndex < offers.size()) {
                 MerchantOffer offer = offers.get(hoveredTradeIndex);
-                List<Component> tooltip = createTradeTooltip(offer);
+                // Pass trade index for dynamic updates
+                List<Component> tooltip = createTradeTooltip(offer, hoveredTradeIndex);
                 guiGraphics.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
             }
         }
@@ -132,6 +133,10 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     }
 
     private List<Component> createTradeTooltip(MerchantOffer offer) {
+        return createTradeTooltip(offer, -1);
+    }
+
+    private List<Component> createTradeTooltip(MerchantOffer offer, int tradeIndex) {
         List<Component> tooltip = new ArrayList<>();
 
         // Result item name
@@ -141,20 +146,50 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
         tooltip.add(Component.empty());
 
         // Cost information
-        tooltip.add(Component.literal("§6Exchange Rate:"));
+        tooltip.add(Component.literal("§6Cost:"));
 
-        ItemStack costA = offer.getItemCostA().itemStack();
-        tooltip.add(Component.literal("  §7• §f" + costA.getCount() + "x §r")
-            .append(costA.getHoverName()));
+        // Try to get TradeEntry for tag display
+        java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries =
+            menu.getTradeEntries();
 
-        ItemStack costB = offer.getCostB();
-        if (!costB.isEmpty()) {
-            tooltip.add(Component.literal("  §7• §f" + costB.getCount() + "x §r")
-                .append(costB.getHoverName()));
+        if (tradeIndex >= 0 && tradeIndex < tradeEntries.size()) {
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry = tradeEntries.get(tradeIndex);
+
+            // Display input requirement
+            net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq = entry.input();
+            if (inputReq.isTag()) {
+                String tagName = inputReq.getTag().location().getPath();
+                String displayName = formatTagName(tagName);
+                tooltip.add(Component.literal("  §7• §f" + inputReq.getCount() + "x §eAny " + displayName));
+            } else {
+                tooltip.add(Component.literal("  §7• §f" + inputReq.getCount() + "x §r")
+                    .append(inputReq.getDisplayStack().getHoverName()));
+            }
+
+            // Display second input if exists
+            if (entry.secondInput().isPresent()) {
+                net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondReq = entry.secondInput().get();
+                if (secondReq.isTag()) {
+                    String tagName = secondReq.getTag().location().getPath();
+                    String displayName = formatTagName(tagName);
+                    tooltip.add(Component.literal("  §7• §f" + secondReq.getCount() + "x §eAny " + displayName));
+                } else {
+                    tooltip.add(Component.literal("  §7• §f" + secondReq.getCount() + "x §r")
+                        .append(secondReq.getDisplayStack().getHoverName()));
+                }
+            }
+        } else {
+            // Fallback to vanilla cost display
+            ItemStack costA = offer.getItemCostA().itemStack();
+            tooltip.add(Component.literal("  §7• §f" + costA.getCount() + "x §r")
+                .append(costA.getHoverName()));
+
+            ItemStack costB = offer.getCostB();
+            if (!costB.isEmpty()) {
+                tooltip.add(Component.literal("  §7• §f" + costB.getCount() + "x §r")
+                    .append(costB.getHoverName()));
+            }
         }
-
-        tooltip.add(Component.literal("  §7→ §f" + offer.getResult().getCount() + "x §r")
-            .append(offer.getResult().getHoverName()));
 
         // Uses remaining
         if (offer.getMaxUses() < Integer.MAX_VALUE / 2) {
@@ -188,7 +223,7 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
                 MerchantOffers offers = menu.getOffers();
                 if (tradeIndex < offers.size()) {
                     MerchantOffer offer = offers.get(tradeIndex);
-                    if (!offer.isOutOfStock() && canAffordTrade(offer)) {
+                    if (!offer.isOutOfStock() && canAffordTrade(offer, tradeIndex)) {
                         // Success sound (experience orb at 30% volume, slightly lower pitch for single clean note)
                         Minecraft.getInstance().getSoundManager().play(
                             net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
@@ -234,26 +269,85 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     }
 
     private boolean canAffordTrade(MerchantOffer offer) {
+        return canAffordTrade(offer, -1);
+    }
+
+    private boolean canAffordTrade(MerchantOffer offer, int tradeIndex) {
         Inventory inventory = Minecraft.getInstance().player.getInventory();
 
-        ItemStack costA = offer.getItemCostA().itemStack();
-        ItemStack costB = offer.getCostB();
+        // Try to get the trade entry for tag-based validation
+        java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries =
+            menu.getTradeEntries();
 
-        int countA = 0;
-        int countB = 0;
+        if (tradeIndex >= 0 && tradeIndex < tradeEntries.size()) {
+            // Use ItemRequirement-based validation
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry tradeEntry = tradeEntries.get(tradeIndex);
+            net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq = tradeEntry.input();
 
-        for (ItemStack stack : inventory.items) {
-            if (ItemStack.isSameItemSameComponents(stack, costA)) {
-                countA += stack.getCount();
+            int countA = 0;
+            for (ItemStack stack : inventory.items) {
+                if (inputReq.matches(stack)) {
+                    countA += stack.getCount();
+                }
             }
-            if (!costB.isEmpty() && ItemStack.isSameItemSameComponents(stack, costB)) {
-                countB += stack.getCount();
+
+            int countB = 0;
+            if (tradeEntry.secondInput().isPresent()) {
+                net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondInputReq = tradeEntry.secondInput().get();
+                for (ItemStack stack : inventory.items) {
+                    if (secondInputReq.matches(stack)) {
+                        countB += stack.getCount();
+                    }
+                }
             }
+
+            boolean hasA = countA >= inputReq.getCount();
+            boolean hasB = !tradeEntry.secondInput().isPresent() || countB >= tradeEntry.secondInput().get().getCount();
+
+            return hasA && hasB;
+        } else {
+            // Fallback to vanilla validation
+            ItemStack costA = offer.getItemCostA().itemStack();
+            ItemStack costB = offer.getCostB();
+
+            int countA = 0;
+            int countB = 0;
+
+            for (ItemStack stack : inventory.items) {
+                if (ItemStack.isSameItemSameComponents(stack, costA)) {
+                    countA += stack.getCount();
+                }
+                if (!costB.isEmpty() && ItemStack.isSameItemSameComponents(stack, costB)) {
+                    countB += stack.getCount();
+                }
+            }
+
+            boolean hasA = countA >= costA.getCount();
+            boolean hasB = costB.isEmpty() || countB >= costB.getCount();
+
+            return hasA && hasB;
+        }
+    }
+
+    /**
+     * Converts tag path to display name (e.g., "decorated_pot_sherds" -> "Pottery Sherd")
+     */
+    private String formatTagName(String tagPath) {
+        // Handle special cases
+        if (tagPath.equals("decorated_pot_sherds")) {
+            return "Pottery Sherd";
         }
 
-        boolean hasA = countA >= costA.getCount();
-        boolean hasB = costB.isEmpty() || countB >= costB.getCount();
-
-        return hasA && hasB;
+        // Generic formatting: remove underscores, capitalize words
+        String[] words = tagPath.split("_");
+        StringBuilder result = new StringBuilder();
+        for (String word : words) {
+            if (!word.isEmpty()) {
+                result.append(Character.toUpperCase(word.charAt(0)))
+                      .append(word.substring(1))
+                      .append(" ");
+            }
+        }
+        return result.toString().trim();
     }
 }

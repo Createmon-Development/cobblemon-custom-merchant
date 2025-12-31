@@ -12,17 +12,21 @@ import java.util.Optional;
 
 /**
  * Configuration for a merchant loaded from datapacks.
- * Defines the merchant's display name, player skin, and trades.
+ * Defines the merchant's display name, appearance, and trades.
  */
 public record MerchantConfig(
     String displayName,
     Optional<String> playerSkinName,
+    Optional<String> villagerBiome,
+    Optional<String> villagerProfession,
     List<TradeEntry> trades
 ) {
     public static final Codec<MerchantConfig> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             Codec.STRING.fieldOf("display_name").forGetter(MerchantConfig::displayName),
             Codec.STRING.optionalFieldOf("player_skin_name").forGetter(MerchantConfig::playerSkinName),
+            Codec.STRING.optionalFieldOf("villager_biome").forGetter(MerchantConfig::villagerBiome),
+            Codec.STRING.optionalFieldOf("villager_profession").forGetter(MerchantConfig::villagerProfession),
             TradeEntry.CODEC.listOf().fieldOf("trades").forGetter(MerchantConfig::trades)
         ).apply(instance, MerchantConfig::new)
     );
@@ -42,8 +46,8 @@ public record MerchantConfig(
      * Represents a single trade entry in the config
      */
     public record TradeEntry(
-        ItemStack input,
-        Optional<ItemStack> secondInput,
+        ItemRequirement input,
+        Optional<ItemRequirement> secondInput,
         ItemStack output,
         int maxUses,
         int villagerXp,
@@ -51,8 +55,8 @@ public record MerchantConfig(
     ) {
         public static final Codec<TradeEntry> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
-                ItemStack.CODEC.fieldOf("input").forGetter(TradeEntry::input),
-                ItemStack.CODEC.optionalFieldOf("second_input").forGetter(TradeEntry::secondInput),
+                ItemRequirement.CODEC.fieldOf("input").forGetter(TradeEntry::input),
+                ItemRequirement.CODEC.optionalFieldOf("second_input").forGetter(TradeEntry::secondInput),
                 ItemStack.CODEC.fieldOf("output").forGetter(TradeEntry::output),
                 Codec.INT.optionalFieldOf("max_uses", 999).forGetter(TradeEntry::maxUses),
                 Codec.INT.optionalFieldOf("villager_xp", 0).forGetter(TradeEntry::villagerXp),
@@ -61,14 +65,15 @@ public record MerchantConfig(
         );
 
         /**
-         * Converts this trade entry to a MerchantOffer
+         * Converts this trade entry to a MerchantOffer for vanilla merchant GUI.
+         * Note: For tag-based requirements, displays the first item from the tag.
          */
         public MerchantOffer toMerchantOffer() {
-            ItemCost inputCost = new ItemCost(input.getItem(), input.getCount());
+            ItemCost inputCost = input.toItemCost();
 
-            if (secondInput.isPresent() && !secondInput.get().isEmpty()) {
+            if (secondInput.isPresent()) {
                 // Two-item trade
-                ItemCost secondInputCost = new ItemCost(secondInput.get().getItem(), secondInput.get().getCount());
+                ItemCost secondInputCost = secondInput.get().toItemCost();
                 return new MerchantOffer(
                     inputCost,
                     Optional.of(secondInputCost),

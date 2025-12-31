@@ -51,10 +51,14 @@ public class MerchantConfigRegistry extends SimpleJsonResourceReloadListener {
             JsonElement json = entry.getValue();
 
             try {
-                MerchantConfig config = MerchantConfig.CODEC
-                    .parse(JsonOps.INSTANCE, json)
-                    .getOrThrow();
+                var result = MerchantConfig.CODEC.parse(JsonOps.INSTANCE, json);
+                if (result.error().isPresent()) {
+                    CobblemonMerchants.LOGGER.error("Failed to parse merchant config {}: {}", id, result.error().get().message());
+                    CobblemonMerchants.LOGGER.error("JSON content: {}", json);
+                    continue;
+                }
 
+                MerchantConfig config = result.result().get();
                 configs.put(id, config);
                 CobblemonMerchants.LOGGER.info("Loaded merchant config: {}", id);
             } catch (Exception e) {
