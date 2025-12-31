@@ -1,6 +1,7 @@
 {
   "display_name": "Basic Merchant",
-  "player_skin_name": "Dausky_",
+  "villager_biome": "minecraft:plains",
+  "villager_profession": "cobblemon:nurse",
   "trades": [
     {
       "input": {

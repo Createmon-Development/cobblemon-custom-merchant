@@ -45,9 +45,11 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             int maxUses = extraData.readInt();
             int villagerXp = extraData.readInt();
             float priceMultiplier = extraData.readFloat();
+            java.util.Optional<String> tradeDisplayName = extraData.readBoolean() ? java.util.Optional.of(extraData.readUtf()) : java.util.Optional.empty();
+            java.util.Optional<Integer> position = extraData.readBoolean() ? java.util.Optional.of(extraData.readInt()) : java.util.Optional.empty();
 
             this.tradeEntries.add(new net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry(
-                input, secondInput, output, maxUses, villagerXp, priceMultiplier
+                input, secondInput, output, maxUses, villagerXp, priceMultiplier, tradeDisplayName, position
             ));
         }
 

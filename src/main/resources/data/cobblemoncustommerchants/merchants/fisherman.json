@@ -1,36 +1,36 @@
 {
-  "display_name": "Pastry Chef",
-  "villager_biome": "minecraft:plains",
-  "villager_profession": "minecraft:farmer",
+  "display_name": "Gambler",
+  "villager_biome": "minecraft:jungle",
+  "villager_profession": "minecraft:fisherman",
   "trades": [
     {
       "input": {
-        "id": "extradelight:sugar_cookie_villager",
+        "id": "minecraft:nautilus_shell",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemon:relic_coin",
         "count": 3
-      },
-      "output": {
-        "id": "cobblemon:relic_coin",
-        "count": 5
       }
     },
     {
       "input": {
-        "id": "cobblemon:poke_cake",
+        "id": "cobblenav:pokenav_item_old",
         "count": 1
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 8
+        "count": 25
       }
     },
     {
       "input": {
-        "id": "createfood:chorus_fruit_cream_white_chocolate",
+        "id": "minecraft:heart_of_the_sea",
         "count": 1
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 12
+        "count": 70
       }
     }
   ]

@@ -67,30 +67,107 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
 
     private void renderTradeItems(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         MerchantOffers offers = menu.getOffers();
+        java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries = menu.getTradeEntries();
         CobblemonMerchants.LOGGER.info("CLIENT: Rendering {} offers", offers.size());
 
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
 
-        for (int i = 0; i < Math.min(offers.size(), TRADES_PER_ROW * MAX_VISIBLE_ROWS); i++) {
-            MerchantOffer offer = offers.get(i);
-            int row = i / TRADES_PER_ROW;
-            int col = i % TRADES_PER_ROW;
+        // Build position mapping: position -> trade index
+        java.util.Map<Integer, Integer> positionMap = new java.util.HashMap<>();
+        java.util.Set<Integer> usedPositions = new java.util.HashSet<>();
 
+        for (int i = 0; i < tradeEntries.size() && i < offers.size(); i++) {
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry = tradeEntries.get(i);
+            if (entry.position().isPresent()) {
+                int pos = entry.position().get();
+                // Validate position is within bounds (0-26 for 3x9 grid)
+                if (pos >= 0 && pos < TRADES_PER_ROW * MAX_VISIBLE_ROWS) {
+                    positionMap.put(pos, i);
+                    usedPositions.add(pos);
+                }
+            }
+        }
+
+        // Render positioned trades first
+        for (java.util.Map.Entry<Integer, Integer> entry : positionMap.entrySet()) {
+            int position = entry.getKey();
+            int tradeIndex = entry.getValue();
+
+            int row = position / TRADES_PER_ROW;
+            int col = position % TRADES_PER_ROW;
             int slotX = x + 8 + col * 18;
             int slotY = y + 18 + row * 18;
 
-            // Draw the display item
-            // For Black Market trades (where result is relic coins), show what the player is trading away
-            ItemStack displayItem = getDisplayItem(offer);
-            CobblemonMerchants.LOGGER.info("CLIENT: Rendering item {} at ({}, {})", displayItem, slotX, slotY);
-            guiGraphics.renderItem(displayItem, slotX, slotY);
-            guiGraphics.renderItemDecorations(this.font, displayItem, slotX, slotY);
+            renderSingleTrade(guiGraphics, offers.get(tradeIndex), tradeEntries.get(tradeIndex), slotX, slotY);
+        }
 
-            // Draw a red X if the trade is out of stock
-            if (offer.isOutOfStock()) {
-                guiGraphics.fill(slotX, slotY, slotX + 16, slotY + 16, 0x80FF0000);
+        // Render non-positioned trades in remaining slots
+        int nextAvailablePosition = 0;
+        for (int i = 0; i < offers.size(); i++) {
+            // Skip trades that have explicit positions
+            boolean hasPosition = i < tradeEntries.size() && tradeEntries.get(i).position().isPresent();
+            if (hasPosition) {
+                continue;
             }
+
+            // Find next available position
+            while (nextAvailablePosition < TRADES_PER_ROW * MAX_VISIBLE_ROWS && usedPositions.contains(nextAvailablePosition)) {
+                nextAvailablePosition++;
+            }
+
+            if (nextAvailablePosition >= TRADES_PER_ROW * MAX_VISIBLE_ROWS) {
+                break; // No more slots available
+            }
+
+            int row = nextAvailablePosition / TRADES_PER_ROW;
+            int col = nextAvailablePosition % TRADES_PER_ROW;
+            int slotX = x + 8 + col * 18;
+            int slotY = y + 18 + row * 18;
+
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry =
+                i < tradeEntries.size() ? tradeEntries.get(i) : null;
+            renderSingleTrade(guiGraphics, offers.get(i), entry, slotX, slotY);
+
+            usedPositions.add(nextAvailablePosition);
+            nextAvailablePosition++;
+        }
+    }
+
+    private void renderSingleTrade(GuiGraphics guiGraphics, MerchantOffer offer,
+                                   net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry,
+                                   int slotX, int slotY) {
+        // Check if this trade is broken (failed to load)
+        boolean isBroken = false;
+        if (entry != null) {
+            try {
+                // Check if the display stack can be obtained (will fail if tag is empty or item doesn't exist)
+                ItemStack testStack = entry.input().getDisplayStack();
+                if (testStack.isEmpty()) {
+                    isBroken = true;
+                }
+            } catch (Exception e) {
+                isBroken = true;
+            }
+        }
+
+        // Draw the display item or barrier block if broken
+        ItemStack displayItem;
+        if (isBroken) {
+            // Display barrier block for broken trades
+            displayItem = new ItemStack(net.minecraft.world.item.Items.BARRIER);
+        } else {
+            // For Black Market trades (where result is relic coins), show what the player is trading away
+            displayItem = getDisplayItem(offer);
+        }
+
+        CobblemonMerchants.LOGGER.info("CLIENT: Rendering item {} at ({}, {})", displayItem, slotX, slotY);
+        guiGraphics.renderItem(displayItem, slotX, slotY);
+        guiGraphics.renderItemDecorations(this.font, displayItem, slotX, slotY);
+
+        // Draw a red X if the trade is out of stock
+        if (offer.isOutOfStock()) {
+            guiGraphics.fill(slotX, slotY, slotX + 16, slotY + 16, 0x80FF0000);
         }
     }
 
@@ -111,21 +188,68 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
         }
     }
 
+    /**
+     * Builds a mapping from grid position to trade index.
+     * This handles both positioned and non-positioned trades.
+     */
+    private java.util.Map<Integer, Integer> buildPositionToTradeMap() {
+        java.util.Map<Integer, Integer> map = new java.util.HashMap<>();
+        java.util.Set<Integer> usedPositions = new java.util.HashSet<>();
+        MerchantOffers offers = menu.getOffers();
+        java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries = menu.getTradeEntries();
+
+        // First, map positioned trades
+        for (int i = 0; i < tradeEntries.size() && i < offers.size(); i++) {
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry = tradeEntries.get(i);
+            if (entry.position().isPresent()) {
+                int pos = entry.position().get();
+                if (pos >= 0 && pos < TRADES_PER_ROW * MAX_VISIBLE_ROWS) {
+                    map.put(pos, i);
+                    usedPositions.add(pos);
+                }
+            }
+        }
+
+        // Then, map non-positioned trades to remaining slots
+        int nextAvailablePosition = 0;
+        for (int i = 0; i < offers.size(); i++) {
+            boolean hasPosition = i < tradeEntries.size() && tradeEntries.get(i).position().isPresent();
+            if (hasPosition) {
+                continue;
+            }
+
+            while (nextAvailablePosition < TRADES_PER_ROW * MAX_VISIBLE_ROWS && usedPositions.contains(nextAvailablePosition)) {
+                nextAvailablePosition++;
+            }
+
+            if (nextAvailablePosition >= TRADES_PER_ROW * MAX_VISIBLE_ROWS) {
+                break;
+            }
+
+            map.put(nextAvailablePosition, i);
+            usedPositions.add(nextAvailablePosition);
+            nextAvailablePosition++;
+        }
+
+        return map;
+    }
+
     private int getHoveredTradeIndex(int mouseX, int mouseY) {
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
 
-        MerchantOffers offers = menu.getOffers();
+        java.util.Map<Integer, Integer> positionToTrade = buildPositionToTradeMap();
 
-        for (int i = 0; i < Math.min(offers.size(), TRADES_PER_ROW * MAX_VISIBLE_ROWS); i++) {
-            int row = i / TRADES_PER_ROW;
-            int col = i % TRADES_PER_ROW;
+        for (java.util.Map.Entry<Integer, Integer> entry : positionToTrade.entrySet()) {
+            int position = entry.getKey();
+            int row = position / TRADES_PER_ROW;
+            int col = position % TRADES_PER_ROW;
 
             int slotX = x + 8 + col * 18;
             int slotY = y + 18 + row * 18;
 
             if (mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16) {
-                return i;
+                return entry.getValue();
             }
         }
 
@@ -139,56 +263,132 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     private List<Component> createTradeTooltip(MerchantOffer offer, int tradeIndex) {
         List<Component> tooltip = new ArrayList<>();
 
-        // Result item name
-        tooltip.add(offer.getResult().getHoverName());
-
-        // Separator
-        tooltip.add(Component.empty());
-
-        // Cost information
-        tooltip.add(Component.literal("§6Cost:"));
-
-        // Try to get TradeEntry for tag display
+        // Try to get TradeEntry for display name and cost info
         java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries =
             menu.getTradeEntries();
+
+        // Check if trade is broken
+        boolean isBroken = false;
+        if (tradeIndex >= 0 && tradeIndex < tradeEntries.size()) {
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry = tradeEntries.get(tradeIndex);
+            try {
+                ItemStack testStack = entry.input().getDisplayStack();
+                if (testStack.isEmpty()) {
+                    isBroken = true;
+                }
+            } catch (Exception e) {
+                isBroken = true;
+            }
+        }
+
+        if (isBroken) {
+            // Show error message for broken trades
+            tooltip.add(Component.literal("§cBroken Trade"));
+            tooltip.add(Component.empty());
+            tooltip.add(Component.literal("§7This trade failed to load."));
+            tooltip.add(Component.literal("§7Check the configuration file."));
+            return tooltip;
+        }
 
         if (tradeIndex >= 0 && tradeIndex < tradeEntries.size()) {
             net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry = tradeEntries.get(tradeIndex);
 
-            // Display input requirement
-            net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq = entry.input();
-            if (inputReq.isTag()) {
-                String tagName = inputReq.getTag().location().getPath();
-                String displayName = formatTagName(tagName);
-                tooltip.add(Component.literal("  §7• §f" + inputReq.getCount() + "x §eAny " + displayName));
+            // Determine trade display name
+            String tradeTitle;
+            if (entry.tradeDisplayName().isPresent()) {
+                // Use custom trade display name if provided
+                tradeTitle = entry.tradeDisplayName().get();
             } else {
-                tooltip.add(Component.literal("  §7• §f" + inputReq.getCount() + "x §r")
-                    .append(inputReq.getDisplayStack().getHoverName()));
-            }
+                // Auto-generate based on relic coins
+                net.minecraft.resources.ResourceLocation relicCoinId =
+                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin");
+                net.minecraft.world.item.Item relicCoinItem =
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.get(relicCoinId);
 
-            // Display second input if exists
-            if (entry.secondInput().isPresent()) {
-                net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondReq = entry.secondInput().get();
-                if (secondReq.isTag()) {
-                    String tagName = secondReq.getTag().location().getPath();
-                    String displayName = formatTagName(tagName);
-                    tooltip.add(Component.literal("  §7• §f" + secondReq.getCount() + "x §eAny " + displayName));
+                boolean inputIsRelicCoin = entry.input().getDisplayStack().getItem() == relicCoinItem;
+                boolean outputIsRelicCoin = entry.output().getItem() == relicCoinItem;
+
+                // Get the name of the non-relic coin item
+                String itemName;
+                if (inputIsRelicCoin && !outputIsRelicCoin) {
+                    // Buying item with relic coins - show output
+                    itemName = entry.output().getHoverName().getString();
+                    tradeTitle = "Buy " + itemName;
+                } else if (!inputIsRelicCoin && outputIsRelicCoin) {
+                    // Selling item for relic coins - show input
+                    String inputName;
+                    if (entry.input().getDisplayName() != null) {
+                        inputName = entry.input().getDisplayName();
+                    } else {
+                        inputName = entry.input().getDisplayStack().getHoverName().getString();
+                    }
+                    tradeTitle = "Sell " + inputName;
                 } else {
-                    tooltip.add(Component.literal("  §7• §f" + secondReq.getCount() + "x §r")
-                        .append(secondReq.getDisplayStack().getHoverName()));
+                    // Neither or both are relic coins - show input
+                    String inputName;
+                    if (entry.input().getDisplayName() != null) {
+                        inputName = entry.input().getDisplayName();
+                    } else {
+                        inputName = entry.input().getDisplayStack().getHoverName().getString();
+                    }
+                    tradeTitle = "Trade " + inputName;
                 }
             }
+
+            tooltip.add(Component.literal(tradeTitle));
+            tooltip.add(Component.empty());
+
+            // Build cost line in format: "Cost: <count>x <name> -> <count>x <name>"
+            net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq = entry.input();
+            StringBuilder costLine = new StringBuilder("§6Cost: §f");
+
+            // Input item
+            costLine.append(inputReq.getCount()).append("x §r");
+            if (inputReq.getDisplayName() != null) {
+                // Use custom display name from input
+                costLine.append(inputReq.getDisplayName());
+            } else {
+                ItemStack displayStack = inputReq.getDisplayStack();
+                costLine.append(displayStack.getHoverName().getString());
+            }
+
+            // Second input if exists
+            if (entry.secondInput().isPresent()) {
+                net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondReq = entry.secondInput().get();
+                costLine.append(" §f+ ").append(secondReq.getCount()).append("x §r");
+                if (secondReq.getDisplayName() != null) {
+                    // Use custom display name from second input
+                    costLine.append(secondReq.getDisplayName());
+                } else {
+                    ItemStack displayStack = secondReq.getDisplayStack();
+                    costLine.append(displayStack.getHoverName().getString());
+                }
+            }
+
+            // Arrow and output
+            costLine.append(" §f-> ").append(entry.output().getCount()).append("x §r");
+            costLine.append(entry.output().getHoverName().getString());
+
+            tooltip.add(Component.literal(costLine.toString()));
         } else {
             // Fallback to vanilla cost display
+            tooltip.add(offer.getResult().getHoverName());
+            tooltip.add(Component.empty());
+
             ItemStack costA = offer.getItemCostA().itemStack();
-            tooltip.add(Component.literal("  §7• §f" + costA.getCount() + "x §r")
-                .append(costA.getHoverName()));
+            StringBuilder costLine = new StringBuilder("§6Cost: §f");
+            costLine.append(costA.getCount()).append("x §r").append(costA.getHoverName().getString());
 
             ItemStack costB = offer.getCostB();
             if (!costB.isEmpty()) {
-                tooltip.add(Component.literal("  §7• §f" + costB.getCount() + "x §r")
-                    .append(costB.getHoverName()));
+                costLine.append(" §f+ ").append(costB.getCount()).append("x §r");
+                costLine.append(costB.getHoverName().getString());
             }
+
+            costLine.append(" §f-> ").append(offer.getResult().getCount()).append("x §r");
+            costLine.append(offer.getResult().getHoverName().getString());
+
+            tooltip.add(Component.literal(costLine.toString()));
         }
 
         // Uses remaining
@@ -329,25 +529,4 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
         }
     }
 
-    /**
-     * Converts tag path to display name (e.g., "decorated_pot_sherds" -> "Pottery Sherd")
-     */
-    private String formatTagName(String tagPath) {
-        // Handle special cases
-        if (tagPath.equals("decorated_pot_sherds")) {
-            return "Pottery Sherd";
-        }
-
-        // Generic formatting: remove underscores, capitalize words
-        String[] words = tagPath.split("_");
-        StringBuilder result = new StringBuilder();
-        for (String word : words) {
-            if (!word.isEmpty()) {
-                result.append(Character.toUpperCase(word.charAt(0)))
-                      .append(word.substring(1))
-                      .append(" ");
-            }
-        }
-        return result.toString().trim();
-    }
 }

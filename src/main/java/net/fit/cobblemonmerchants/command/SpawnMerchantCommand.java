@@ -24,7 +24,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Map;
 
 /**
- * Command for spawning merchants: /spawnmerchant <merchant_type> [player_skin_name]
+ * Command for spawning merchants: /spawnmerchant <merchant_type> [villager_biome] [villager_profession]
  */
 public class SpawnMerchantCommand {
 
@@ -40,13 +40,10 @@ public class SpawnMerchantCommand {
                 .then(Commands.argument("merchant_type", ResourceLocationArgument.id())
                     .suggests(MERCHANT_TYPE_SUGGESTIONS)
                     .executes(SpawnMerchantCommand::spawnMerchant)
-                    .then(Commands.argument("player_skin_name", StringArgumentType.word())
-                        .executes(SpawnMerchantCommand::spawnMerchantWithSkin)
-                        .then(Commands.argument("villager_biome", StringArgumentType.word())
-                            .executes(SpawnMerchantCommand::spawnMerchantWithBiome)
-                            .then(Commands.argument("villager_profession", StringArgumentType.word())
-                                .executes(SpawnMerchantCommand::spawnMerchantWithProfession)
-                            )
+                    .then(Commands.argument("villager_biome", ResourceLocationArgument.id())
+                        .executes(SpawnMerchantCommand::spawnMerchantWithBiome)
+                        .then(Commands.argument("villager_profession", ResourceLocationArgument.id())
+                            .executes(SpawnMerchantCommand::spawnMerchantWithProfession)
                         )
                     )
                 )
@@ -54,28 +51,21 @@ public class SpawnMerchantCommand {
     }
 
     private static int spawnMerchant(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        return spawnMerchantInternal(context, null, null, null);
-    }
-
-    private static int spawnMerchantWithSkin(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String skinName = StringArgumentType.getString(context, "player_skin_name");
-        return spawnMerchantInternal(context, skinName, null, null);
+        return spawnMerchantInternal(context, null, null);
     }
 
     private static int spawnMerchantWithBiome(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String skinName = StringArgumentType.getString(context, "player_skin_name");
-        String biome = StringArgumentType.getString(context, "villager_biome");
-        return spawnMerchantInternal(context, skinName, biome, null);
+        ResourceLocation biome = ResourceLocationArgument.getId(context, "villager_biome");
+        return spawnMerchantInternal(context, biome.toString(), null);
     }
 
     private static int spawnMerchantWithProfession(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String skinName = StringArgumentType.getString(context, "player_skin_name");
-        String biome = StringArgumentType.getString(context, "villager_biome");
-        String profession = StringArgumentType.getString(context, "villager_profession");
-        return spawnMerchantInternal(context, skinName, biome, profession);
+        ResourceLocation biome = ResourceLocationArgument.getId(context, "villager_biome");
+        ResourceLocation profession = ResourceLocationArgument.getId(context, "villager_profession");
+        return spawnMerchantInternal(context, biome.toString(), profession.toString());
     }
 
-    private static int spawnMerchantInternal(CommandContext<CommandSourceStack> context, String overrideSkinName,
+    private static int spawnMerchantInternal(CommandContext<CommandSourceStack> context,
             String overrideBiome, String overrideProfession) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         ResourceLocation merchantTypeId = ResourceLocationArgument.getId(context, "merchant_type");
@@ -90,7 +80,6 @@ public class SpawnMerchantCommand {
         }
 
         // Treat "-" as placeholder (use config default)
-        if ("-".equals(overrideSkinName)) overrideSkinName = null;
         if ("-".equals(overrideBiome)) overrideBiome = null;
         if ("-".equals(overrideProfession)) overrideProfession = null;
 
@@ -104,10 +93,6 @@ public class SpawnMerchantCommand {
         // Configure merchant
         merchant.setCustomName(Component.literal(config.displayName()));
         merchant.setCustomNameVisible(true);
-
-        // Set player skin (use override if provided, otherwise use config)
-        String skinName = overrideSkinName != null ? overrideSkinName : config.playerSkinName().orElse("");
-        merchant.setPlayerSkinName(skinName);
 
         // Set villager biome (use override if provided, otherwise use config, default to plains)
         String biome = overrideBiome != null ? overrideBiome : config.villagerBiome().orElse("plains");
@@ -137,8 +122,7 @@ public class SpawnMerchantCommand {
         level.addFreshEntity(merchant);
 
         // Send success message
-        source.sendSuccess(() -> Component.literal("Spawned merchant: " + config.displayName() +
-            (skinName.isEmpty() ? "" : " (skin: " + skinName + ")")), true);
+        source.sendSuccess(() -> Component.literal("Spawned merchant: " + config.displayName()), true);
 
         return 1;
     }

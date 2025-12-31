@@ -1,5 +1,6 @@
 {
   "display_name": "Black Market",
-  "player_skin_name": "imanant",
+  "villager_biome": "minecraft:swamp",
+  "villager_profession": "minecraft:nitwit",
   "trades": []
 }

@@ -1,6 +1,7 @@
 {
   "display_name": "Gambler",
-  "player_skin_name": "aracekarr",
+  "villager_biome": "minecraft:desert",
+  "villager_profession": "minecraft:librarian",
   "trades": [
     {
       "input": {
@@ -10,8 +11,7 @@
       "output": {
         "id": "cobblemonpokeboxes:pokeball_pokebox",
         "count": 1
-      },
-      "max_uses": 10
+      }
     },
     {
       "input": {
@@ -21,8 +21,7 @@
       "output": {
         "id": "cobblemonpokeboxes:greatball_pokebox",
         "count": 1
-      },
-      "max_uses": 10
+      }
     },
     {
       "input": {
@@ -32,8 +31,7 @@
       "output": {
         "id": "simplehats:hatbag_festive",
         "count": 1
-      },
-      "max_uses": 20
+      }
     }
   ]
 }

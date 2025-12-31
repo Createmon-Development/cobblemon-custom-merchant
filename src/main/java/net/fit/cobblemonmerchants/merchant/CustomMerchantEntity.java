@@ -189,12 +189,14 @@ public class CustomMerchantEntity extends Villager {
     @Override
     protected void customServerAiStep() {
         // Don't call super - prevents villager from running AI that changes profession
+        // Gravity and physics are handled in aiStep()
     }
 
     @Override
     public void tick() {
-        // Call Entity.tick() directly, skip Villager.tick() to prevent profession changes
-        super.baseTick();
+        // Call LivingEntity.tick() which includes gravity, but skip Villager-specific logic
+        // We override aiStep() below to prevent horizontal movement while allowing vertical (gravity)
+        super.tick();
     }
 
     @Override
@@ -249,6 +251,14 @@ public class CustomMerchantEntity extends Villager {
                 buf.writeInt(entry.maxUses());
                 buf.writeInt(entry.villagerXp());
                 buf.writeFloat(entry.priceMultiplier());
+                buf.writeBoolean(entry.tradeDisplayName().isPresent());
+                if (entry.tradeDisplayName().isPresent()) {
+                    buf.writeUtf(entry.tradeDisplayName().get());
+                }
+                buf.writeBoolean(entry.position().isPresent());
+                if (entry.position().isPresent()) {
+                    buf.writeInt(entry.position().get());
+                }
             }
         });
     }
@@ -284,6 +294,11 @@ public class CustomMerchantEntity extends Villager {
         return true;
     }
 
+    @Override
+    public boolean isNoGravity() {
+        return false; // Ensure gravity is enabled
+    }
+
     public boolean canChangeDimensions() {
         return false;
     }
@@ -293,7 +308,7 @@ public class CustomMerchantEntity extends Villager {
         // Call parent to handle gravity and other physics, but prevent AI movement
         super.aiStep();
 
-        // Force the entity to stay in place (prevent any movement from AI)
+        // Force the entity to stay in place horizontally, but allow gravity
         this.setDeltaMovement(this.getDeltaMovement().multiply(0, 1, 0));
     }
 

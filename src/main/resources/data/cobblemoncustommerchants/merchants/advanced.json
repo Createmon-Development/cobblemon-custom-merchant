@@ -1,6 +1,7 @@
 {
   "display_name": "Advanced Merchant",
-  "player_skin_name": "Fit_",
+  "villager_biome": "minecraft:plains",
+  "villager_profession": "minecraft:toolsmith",
   "trades": [
     {
       "input": {

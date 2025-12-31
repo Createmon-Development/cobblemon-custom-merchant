@@ -1,28 +1,62 @@
 {
   "display_name": "Treasure Hunter",
-  "player_skin_name": "Dausky_",
+  "villager_biome": "minecraft:plains",
+  "villager_profession": "minecraft:cartographer",
   "trades": [
     {
       "input": {
-        "id": "cobblemon:relic_coin_pouch",
+        "id": "minecraft:sniffer_egg",
         "count": 1
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 5
-      },
-      "max_uses": 2147483647
+        "count": 15
+      }
     },
     {
       "input": {
-        "id": "cobblemon:relic_coin_sack",
-        "count": 1
+        "tag": "minecraft:decorated_pot_sherds",
+        "count": 1,
+        "display_name": "Pottery Sherd"
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 12
+        "count": 3
+      }
+    },
+    {
+      "input": {
+        "id": "minecraft:goat_horn",
+        "count": 1,
+        "display_name": "Goat Horn",
+        "ignore_components": true
       },
-      "max_uses": 2147483647
+      "output": {
+        "id": "cobblemon:relic_coin",
+        "count": 15
+      }
+    },
+    {
+      "input": {
+        "tag": "minecraft:creeper_drop_music_discs",
+        "count": 1,
+        "display_name": "Music Disc"
+      },
+      "output": {
+        "id": "cobblemon:relic_coin",
+        "count": 10
+      }
+    },
+    {
+      "input": {
+        "tag": "cobblemon:fossils",
+        "count": 1,
+        "display_name": "Fossil"
+      },
+      "output": {
+        "id": "cobblemon:relic_coin",
+        "count": 80
+      }
     }
   ]
 }

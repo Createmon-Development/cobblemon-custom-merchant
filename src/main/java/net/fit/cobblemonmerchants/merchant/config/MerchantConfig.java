@@ -51,16 +51,20 @@ public record MerchantConfig(
         ItemStack output,
         int maxUses,
         int villagerXp,
-        float priceMultiplier
+        float priceMultiplier,
+        Optional<String> tradeDisplayName,
+        Optional<Integer> position
     ) {
         public static final Codec<TradeEntry> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
                 ItemRequirement.CODEC.fieldOf("input").forGetter(TradeEntry::input),
                 ItemRequirement.CODEC.optionalFieldOf("second_input").forGetter(TradeEntry::secondInput),
                 ItemStack.CODEC.fieldOf("output").forGetter(TradeEntry::output),
-                Codec.INT.optionalFieldOf("max_uses", 999).forGetter(TradeEntry::maxUses),
+                Codec.INT.optionalFieldOf("max_uses", Integer.MAX_VALUE).forGetter(TradeEntry::maxUses),
                 Codec.INT.optionalFieldOf("villager_xp", 0).forGetter(TradeEntry::villagerXp),
-                Codec.FLOAT.optionalFieldOf("price_multiplier", 0.0f).forGetter(TradeEntry::priceMultiplier)
+                Codec.FLOAT.optionalFieldOf("price_multiplier", 0.0f).forGetter(TradeEntry::priceMultiplier),
+                Codec.STRING.optionalFieldOf("trade_display_name").forGetter(TradeEntry::tradeDisplayName),
+                Codec.INT.optionalFieldOf("position").forGetter(TradeEntry::position)
             ).apply(instance, TradeEntry::new)
         );
 
