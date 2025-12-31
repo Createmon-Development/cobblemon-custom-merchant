@@ -38,7 +38,7 @@
     },
     {
       "input": {
-        "tag": "minecraft:creeper_drop_music_discs",
+        "tag": "c:music_discs",
         "count": 1,
         "display_name": "Music Disc"
       },
