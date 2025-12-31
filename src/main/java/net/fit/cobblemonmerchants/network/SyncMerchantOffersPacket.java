@@ -2,6 +2,7 @@ package net.fit.cobblemonmerchants.network;
 
 import io.netty.buffer.ByteBuf;
 import net.fit.cobblemonmerchants.merchant.menu.MerchantTradeMenu;
+import net.fit.cobblemonmerchants.merchant.trading.MultiItemMerchantOffer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -14,6 +15,8 @@ import net.minecraft.world.item.trading.MerchantOffers;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -31,6 +34,10 @@ public record SyncMerchantOffersPacket(int containerId, MerchantOffers offers) i
             buf.writeInt(packet.offers.size());
 
             for (MerchantOffer offer : packet.offers) {
+                // Write whether this is a MultiItemMerchantOffer
+                boolean isMultiItem = offer instanceof MultiItemMerchantOffer;
+                buf.writeBoolean(isMultiItem);
+
                 // Write ItemCost A
                 ItemStack.STREAM_CODEC.encode(buf, offer.getItemCostA().itemStack());
 
@@ -50,6 +57,23 @@ public record SyncMerchantOffersPacket(int containerId, MerchantOffers offers) i
                 buf.writeInt(offer.getXp());
                 buf.writeFloat(offer.getPriceMultiplier());
                 buf.writeInt(offer.getDemand());
+
+                // If it's a MultiItemMerchantOffer, write the additional data
+                if (isMultiItem) {
+                    MultiItemMerchantOffer multiOffer = (MultiItemMerchantOffer) offer;
+                    // Write accepted items list
+                    List<String> acceptedItems = multiOffer.getAcceptedItemIds();
+                    buf.writeInt(acceptedItems.size());
+                    for (String itemId : acceptedItems) {
+                        buf.writeUtf(itemId);
+                    }
+                    // Write custom display name
+                    String displayName = multiOffer.getCustomDisplayName();
+                    buf.writeBoolean(displayName != null);
+                    if (displayName != null) {
+                        buf.writeUtf(displayName);
+                    }
+                }
             }
         }
 
@@ -60,6 +84,9 @@ public record SyncMerchantOffersPacket(int containerId, MerchantOffers offers) i
             MerchantOffers offers = new MerchantOffers();
 
             for (int i = 0; i < size; i++) {
+                // Read whether this is a MultiItemMerchantOffer
+                boolean isMultiItem = buf.readBoolean();
+
                 // Read ItemCost A
                 ItemStack costAStack = ItemStack.STREAM_CODEC.decode(buf);
                 ItemCost costA = new ItemCost(costAStack.getItemHolder().value(), costAStack.getCount());
@@ -82,7 +109,30 @@ public record SyncMerchantOffersPacket(int containerId, MerchantOffers offers) i
                 int demand = buf.readInt();
 
                 // Create the merchant offer
-                MerchantOffer offer = new MerchantOffer(costA, costB, result, uses, maxUses, xp, priceMultiplier, demand);
+                MerchantOffer offer;
+                if (isMultiItem) {
+                    // Read MultiItemMerchantOffer-specific data
+                    int acceptedItemsCount = buf.readInt();
+                    List<String> acceptedItemIds = new ArrayList<>();
+                    for (int j = 0; j < acceptedItemsCount; j++) {
+                        acceptedItemIds.add(buf.readUtf());
+                    }
+
+                    String customDisplayName = null;
+                    if (buf.readBoolean()) {
+                        customDisplayName = buf.readUtf();
+                    }
+
+                    // Create MultiItemMerchantOffer
+                    offer = new MultiItemMerchantOffer(costA, costB, result, maxUses, xp, priceMultiplier, acceptedItemIds, customDisplayName);
+                    // Set uses and demand manually since the constructor doesn't take them
+                    offer.resetUses();
+                    for (int j = 0; j < uses; j++) {
+                        offer.increaseUses();
+                    }
+                } else {
+                    offer = new MerchantOffer(costA, costB, result, uses, maxUses, xp, priceMultiplier, demand);
+                }
                 offers.add(offer);
             }
 

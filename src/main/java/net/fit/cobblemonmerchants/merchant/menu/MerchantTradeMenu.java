@@ -1,6 +1,7 @@
 package net.fit.cobblemonmerchants.merchant.menu;
 
 import net.fit.cobblemonmerchants.merchant.CustomMerchantEntity;
+import net.fit.cobblemonmerchants.merchant.trading.MultiItemMerchantOffer;
 import net.fit.cobblemonmerchants.network.SyncMerchantOffersPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -103,35 +104,85 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             return false;
         }
 
-        // Check if player has the required items
-        ItemStack costA = offer.getItemCostA().itemStack();
         ItemStack costB = offer.getCostB();
 
-        // Count how many of each item the player has
-        int countA = 0;
-        int countB = 0;
+        // For MultiItemMerchantOffer, use satisfiedBy() to check and find the actual items
+        if (offer instanceof MultiItemMerchantOffer) {
+            // Find which items in inventory satisfy this trade
+            ItemStack matchingCostA = null;
 
-        for (ItemStack stack : player.getInventory().items) {
-            if (ItemStack.isSameItemSameComponents(stack, costA)) {
-                countA += stack.getCount();
+            for (ItemStack stack : player.getInventory().items) {
+                if (offer.satisfiedBy(stack, costB.isEmpty() ? ItemStack.EMPTY : costB)) {
+                    matchingCostA = stack;
+                    break;
+                }
             }
-            if (!costB.isEmpty() && ItemStack.isSameItemSameComponents(stack, costB)) {
-                countB += stack.getCount();
+
+            if (matchingCostA == null) {
+                return false;
             }
-        }
 
-        // Check if player has enough items
-        if (countA < costA.getCount()) {
-            return false;
-        }
-        if (!costB.isEmpty() && countB < costB.getCount()) {
-            return false;
-        }
+            // Check if player has enough of the matching item
+            int countA = 0;
+            for (ItemStack stack : player.getInventory().items) {
+                if (ItemStack.isSameItem(stack, matchingCostA)) {
+                    countA += stack.getCount();
+                }
+            }
 
-        // Remove the cost items from player inventory
-        removeItems(player.getInventory(), costA, costA.getCount());
-        if (!costB.isEmpty()) {
-            removeItems(player.getInventory(), costB, costB.getCount());
+            int requiredCount = offer.getItemCostA().count();
+            if (countA < requiredCount) {
+                return false;
+            }
+
+            // Check second cost if present
+            if (!costB.isEmpty()) {
+                int countB = 0;
+                for (ItemStack stack : player.getInventory().items) {
+                    if (ItemStack.isSameItemSameComponents(stack, costB)) {
+                        countB += stack.getCount();
+                    }
+                }
+                if (countB < costB.getCount()) {
+                    return false;
+                }
+            }
+
+            // Remove items
+            removeItemsByType(player.getInventory(), matchingCostA.getItem(), requiredCount);
+            if (!costB.isEmpty()) {
+                removeItems(player.getInventory(), costB, costB.getCount());
+            }
+        } else {
+            // Standard trade - exact item matching
+            ItemStack costA = offer.getItemCostA().itemStack();
+
+            // Count how many of each item the player has
+            int countA = 0;
+            int countB = 0;
+
+            for (ItemStack stack : player.getInventory().items) {
+                if (ItemStack.isSameItemSameComponents(stack, costA)) {
+                    countA += stack.getCount();
+                }
+                if (!costB.isEmpty() && ItemStack.isSameItemSameComponents(stack, costB)) {
+                    countB += stack.getCount();
+                }
+            }
+
+            // Check if player has enough items
+            if (countA < costA.getCount()) {
+                return false;
+            }
+            if (!costB.isEmpty() && countB < costB.getCount()) {
+                return false;
+            }
+
+            // Remove the cost items from player inventory
+            removeItems(player.getInventory(), costA, costA.getCount());
+            if (!costB.isEmpty()) {
+                removeItems(player.getInventory(), costB, costB.getCount());
+            }
         }
 
         // Give the player the result item
@@ -156,6 +207,23 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         for (int i = 0; i < inventory.items.size() && remaining > 0; i++) {
             ItemStack stack = inventory.items.get(i);
             if (ItemStack.isSameItemSameComponents(stack, toRemove)) {
+                int removeCount = Math.min(remaining, stack.getCount());
+                stack.shrink(removeCount);
+                remaining -= removeCount;
+            }
+        }
+    }
+
+    /**
+     * Removes a specific number of items of the given type from the inventory
+     * (ignores components - used for MultiItemMerchantOffer)
+     */
+    private void removeItemsByType(Inventory inventory, net.minecraft.world.item.Item itemType, int count) {
+        int remaining = count;
+
+        for (int i = 0; i < inventory.items.size() && remaining > 0; i++) {
+            ItemStack stack = inventory.items.get(i);
+            if (stack.getItem() == itemType) {
                 int removeCount = Math.min(remaining, stack.getCount());
                 stack.shrink(removeCount);
                 remaining -= removeCount;

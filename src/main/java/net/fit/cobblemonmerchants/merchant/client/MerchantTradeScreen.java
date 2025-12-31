@@ -84,6 +84,7 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
             // For Black Market trades (where result is relic coins), show what the player is trading away
             ItemStack displayItem = getDisplayItem(offer);
             CobblemonMerchants.LOGGER.info("CLIENT: Rendering item {} at ({}, {})", displayItem, slotX, slotY);
+            CobblemonMerchants.LOGGER.info("CLIENT: Item name: {}, Has custom name: {}", displayItem.getHoverName().getString(), displayItem.has(net.minecraft.core.component.DataComponents.CUSTOM_NAME));
             guiGraphics.renderItem(displayItem, slotX, slotY);
             guiGraphics.renderItemDecorations(this.font, displayItem, slotX, slotY);
 
@@ -143,7 +144,13 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
         // Cost information
         tooltip.add(Component.literal("§6Exchange Rate:"));
 
-        ItemStack costA = offer.getItemCostA().itemStack();
+        // Get the display item - use custom display stack for MultiItemMerchantOffer
+        ItemStack costA;
+        if (offer instanceof net.fit.cobblemonmerchants.merchant.trading.MultiItemMerchantOffer multiItemOffer) {
+            costA = multiItemOffer.getCustomDisplayStack();
+        } else {
+            costA = offer.getItemCostA().itemStack();
+        }
         tooltip.add(Component.literal("  §7• §f" + costA.getCount() + "x §r")
             .append(costA.getHoverName()));
 
@@ -189,10 +196,10 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
                 if (tradeIndex < offers.size()) {
                     MerchantOffer offer = offers.get(tradeIndex);
                     if (!offer.isOutOfStock() && canAffordTrade(offer)) {
-                        // Success sound (experience orb at 30% volume, slightly lower pitch for single clean note)
+                        // Success sound (experience orb at 15% volume, slightly lower pitch for single clean note)
                         Minecraft.getInstance().getSoundManager().play(
                             net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                                SoundEvents.EXPERIENCE_ORB_PICKUP, 0.3F, 0.9F
+                                SoundEvents.EXPERIENCE_ORB_PICKUP, 0.15F, 0.9F
                             )
                         );
                     } else {
@@ -226,6 +233,10 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
 
         if (result.getItem() == relicCoinItem) {
             // This is a Black Market trade - show the item being traded (cost)
+            // For MultiItemMerchantOffer, use the custom display stack
+            if (offer instanceof net.fit.cobblemonmerchants.merchant.trading.MultiItemMerchantOffer multiItemOffer) {
+                return multiItemOffer.getCustomDisplayStack();
+            }
             return offer.getItemCostA().itemStack();
         }
 
@@ -236,9 +247,21 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     private boolean canAffordTrade(MerchantOffer offer) {
         Inventory inventory = Minecraft.getInstance().player.getInventory();
 
-        ItemStack costA = offer.getItemCostA().itemStack();
         ItemStack costB = offer.getCostB();
 
+        // Check if this is a MultiItemMerchantOffer
+        if (offer instanceof net.fit.cobblemonmerchants.merchant.trading.MultiItemMerchantOffer) {
+            // For multi-item offers, check if we have ANY of the accepted items
+            for (ItemStack stack : inventory.items) {
+                if (offer.satisfiedBy(stack, costB.isEmpty() ? ItemStack.EMPTY : costB)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Standard check for regular offers
+        ItemStack costA = offer.getItemCostA().itemStack();
         int countA = 0;
         int countB = 0;
 

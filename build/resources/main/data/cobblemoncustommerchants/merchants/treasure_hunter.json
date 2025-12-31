@@ -23,6 +23,53 @@
         "count": 12
       },
       "max_uses": 2147483647
+    },
+    {
+      "accepted_inputs": [
+        "minecraft:angler_pottery_sherd",
+        "minecraft:archer_pottery_sherd",
+        "minecraft:arms_up_pottery_sherd",
+        "minecraft:blade_pottery_sherd",
+        "minecraft:brewer_pottery_sherd",
+        "minecraft:burn_pottery_sherd",
+        "minecraft:danger_pottery_sherd",
+        "minecraft:explorer_pottery_sherd",
+        "minecraft:flow_pottery_sherd",
+        "minecraft:friend_pottery_sherd",
+        "minecraft:guster_pottery_sherd",
+        "minecraft:heart_pottery_sherd",
+        "minecraft:heartbreak_pottery_sherd",
+        "minecraft:howl_pottery_sherd",
+        "minecraft:miner_pottery_sherd",
+        "minecraft:mourner_pottery_sherd",
+        "minecraft:plenty_pottery_sherd",
+        "minecraft:prize_pottery_sherd",
+        "minecraft:scrape_pottery_sherd",
+        "minecraft:sheaf_pottery_sherd",
+        "minecraft:shelter_pottery_sherd",
+        "minecraft:skull_pottery_sherd",
+        "minecraft:snort_pottery_sherd",
+        "cobblemon:bygone_sherd",
+        "cobblemon:capture_sherd",
+        "cobblemon:dome_sherd",
+        "cobblemon:helix_sherd",
+        "cobblemon:nostalgic_sherd",
+        "cobblemon:suspicious_sherd",
+        "yungscavebiomes:hourglass_pottery_sherd",
+        "yungscavebiomes:clock_pottery_sherd",
+        "galosphere:thirst_pottery_sherd",
+        "galosphere:wave_pottery_sherd"
+      ],
+      "display_name": "Any Pottery Sherd",
+      "display_input": {
+        "id": "cobblemon:suspicious_sherd",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemon:relic_coin",
+        "count": 3
+      },
+      "max_uses": 2147483647
     }
   ]
 }
