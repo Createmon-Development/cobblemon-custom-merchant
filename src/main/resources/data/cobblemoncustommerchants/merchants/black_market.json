@@ -2,5 +2,62 @@
   "display_name": "Black Market",
   "villager_biome": "minecraft:swamp",
   "villager_profession": "minecraft:nitwit",
-  "trades": []
+  "trades": [],
+
+  "black_market_config": {
+    "rotation_days": 14,
+    "minecraft_items_count": 3,
+    "cobblemon_items_count": 1,
+
+    "global_price_multiplier": 1.0,
+    "cobblemon_exclusive_multiplier": 1.5,
+    "held_item_multiplier": 1.3,
+
+    "trade_uses_config": {
+      "min": 1,
+      "base": 3,
+      "max": 10,
+      "threshold": 10.0
+    },
+
+    "variability_config": {
+      "min_price": 0.6,
+      "max_price": 1.2,
+      "min_count": 0.7,
+      "max_count": 1.3,
+      "min_trade_use": 0.7,
+      "max_trade_use": 1.3
+    },
+
+    "gameplay_modifiers": {
+      "minecraft:carrot": 0.3,
+      "minecraft:potato": 0.3,
+      "minecraft:poisonous_potato": 0.1,
+      "minecraft:ender_pearl": 1.4,
+      "minecraft:gold_ingot": 1.2,
+      "cobblemon:rare_candy": 2.0
+    },
+
+    "lucky_trade_config": {
+      "enabled": true,
+      "chance": 0.01,
+      "price_multiplier": 1.5,
+      "trade_uses_multiplier": 2.0
+    },
+
+    "low_cost_trade_config": {
+      "multi_item_threshold": 3,
+      "min_price": 1,
+      "max_price": 5
+    },
+
+    "value_capping_config": {
+      "outlier_detection_enabled": true,
+      "outlier_penalty_multiplier": 0.5,
+      "crafting_check_enabled": true,
+      "craftable_max_value": 10
+    },
+
+    "excluded_mods": []
+  }
 }

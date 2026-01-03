@@ -37,8 +37,11 @@ public class CobblemonMerchants {
 
         // Register items and entities
         ModItems.register(modEventBus);
+        net.fit.cobblemonmerchants.item.ModCreativeTabs.register(modEventBus);
         ModEntities.register(modEventBus);
         net.fit.cobblemonmerchants.merchant.menu.ModMenuTypes.register(modEventBus);
+        net.fit.cobblemonmerchants.item.menu.ModMenuTypes.register(modEventBus);
+        net.fit.cobblemonmerchants.item.component.ModDataComponents.register(modEventBus);
 
         // Register entity attributes
         modEventBus.addListener(this::registerEntityAttributes);
@@ -126,6 +129,18 @@ public class CobblemonMerchants {
                 net.fit.cobblemonmerchants.merchant.menu.ModMenuTypes.MERCHANT_TRADE_MENU.get(),
                 net.fit.cobblemonmerchants.merchant.client.MerchantTradeScreen::new
             );
+            event.register(
+                net.fit.cobblemonmerchants.item.menu.ModMenuTypes.RELIC_COIN_BAG_MENU.get(),
+                net.fit.cobblemonmerchants.item.client.RelicCoinBagScreen::new
+            );
+        }
+
+        @SubscribeEvent
+        public static void onClientSetup(net.neoforged.fml.event.lifecycle.FMLClientSetupEvent event) {
+            // Register item properties on the main thread
+            event.enqueueWork(() -> {
+                net.fit.cobblemonmerchants.item.client.ItemPropertyRegistry.register();
+            });
         }
     }
 }

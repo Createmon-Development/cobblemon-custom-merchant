@@ -1,3 +1,6 @@
+# Credits:
+Sprite work for the relic coin bag done by [Sharcys](gaywhiteboy.com)
+
 # Cobblemon Custom Merchants
 
 A NeoForge mod for Minecraft 1.21.1 that adds a customizable merchant system for Cobblemon with datapack-driven trades and dynamic Black Market pricing.

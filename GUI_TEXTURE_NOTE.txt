@@ -1,0 +1,8 @@
+The GUI texture for relic_coin_purse.png should be a 176x166 pixel image following the standard Minecraft chest GUI format.
+You can use any image editing software to create this, or use the default Minecraft chest texture as a base.
+
+The texture should be placed at:
+src/main/resources/assets/cobblemoncustommerchants/textures/gui/relic_coin_purse.png
+
+For now, the mod will use the texture path but may show a missing texture if the file doesn't exist.
+You can copy minecraft's chest texture or create a custom one later.

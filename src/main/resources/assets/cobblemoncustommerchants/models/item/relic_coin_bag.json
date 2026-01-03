@@ -1,0 +1,14 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "cobblemoncustommerchants:item/relic_coin_bag_closed"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "cobblemoncustommerchants:bag_open": 1
+      },
+      "model": "cobblemoncustommerchants:item/relic_coin_bag_open"
+    }
+  ]
+}
