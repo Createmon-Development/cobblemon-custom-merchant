@@ -9,16 +9,14 @@ public class CobblemonDropData {
     private final String itemId;
     private final List<PokemonDropInfo> pokemonDrops;
     private final boolean isCobblemonExclusive;
-    private final boolean isCraftable;
-    private final boolean isGrowable;
+    private final boolean isHeldItem;
 
     public CobblemonDropData(String itemId, List<PokemonDropInfo> pokemonDrops,
-                            boolean isCobblemonExclusive, boolean isCraftable, boolean isGrowable) {
+                            boolean isCobblemonExclusive, boolean isHeldItem) {
         this.itemId = itemId;
         this.pokemonDrops = pokemonDrops;
         this.isCobblemonExclusive = isCobblemonExclusive;
-        this.isCraftable = isCraftable;
-        this.isGrowable = isGrowable;
+        this.isHeldItem = isHeldItem;
     }
 
     public String getItemId() {
@@ -33,12 +31,8 @@ public class CobblemonDropData {
         return isCobblemonExclusive;
     }
 
-    public boolean isCraftable() {
-        return isCraftable;
-    }
-
-    public boolean isGrowable() {
-        return isGrowable;
+    public boolean isHeldItem() {
+        return isHeldItem;
     }
 
     /**
