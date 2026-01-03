@@ -1,5 +1,5 @@
 # Credits:
-Sprite work for the relic coin bag done by [Sharcys](gaywhiteboy.com)
+Sprite work for the relic coin bag done by [Sharcys]([gaywhiteboy.com](https://gaywhiteboy.com))
 
 # Cobblemon Custom Merchants
 
