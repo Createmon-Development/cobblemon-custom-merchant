@@ -12,7 +12,15 @@ import net.minecraft.world.item.ItemStack;
 public class CoinCountRenderer {
 
     /**
-     * Formats a coin count for display
+     * Formats a coin count for display with exact count and commas
+     * - Example: 1115 -> "1,115"
+     */
+    public static String formatCoinCountExact(int count) {
+        return String.format("%,d", count);
+    }
+
+    /**
+     * Formats a coin count for display (short form)
      * - 1-999: exact count
      * - 1000-9999: "1k", "1.1k", "1.2k", etc. (increments of 100)
      * - 10000+: "10k", "11k", etc. (increments of 1000)

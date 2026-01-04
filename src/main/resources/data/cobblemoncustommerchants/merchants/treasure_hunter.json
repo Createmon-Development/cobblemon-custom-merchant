@@ -1,6 +1,6 @@
 {
   "display_name": "Treasure Hunter",
-  "villager_biome": "minecraft:plains",
+  "villager_biome": "minecraft:desert",
   "villager_profession": "minecraft:cartographer",
   "trades": [
     {

@@ -82,15 +82,18 @@ public class RelicCoinBagItem extends Item {
         // Add "Soulbound" in dark purple
         tooltipComponents.add(Component.literal("Soulbound").withStyle(ChatFormatting.DARK_PURPLE));
 
-        // Add coin count below soulbound
-        String formattedCount = net.fit.cobblemonmerchants.item.client.CoinCountRenderer.formatCoinCount(coinCount);
+        // Add coin count below soulbound (exact count with commas)
+        String formattedCount = net.fit.cobblemonmerchants.item.client.CoinCountRenderer.formatCoinCountExact(coinCount);
         tooltipComponents.add(Component.literal("Coins: " + formattedCount).withStyle(ChatFormatting.GOLD));
 
         // Add blank line before flavor text
         tooltipComponents.add(Component.literal(""));
 
-        // Add flavor text in dark gray italic
-        tooltipComponents.add(Component.literal("The burden of avarice persists through death~")
+        // Add flavor text in dark gray italic (multi-line)
+        tooltipComponents.add(Component.literal("The burden of avaraice persists through death,")
+            .withStyle(ChatFormatting.DARK_GRAY)
+            .withStyle(ChatFormatting.ITALIC));
+        tooltipComponents.add(Component.literal("but only the heavist is safe from theft~")
             .withStyle(ChatFormatting.DARK_GRAY)
             .withStyle(ChatFormatting.ITALIC));
 

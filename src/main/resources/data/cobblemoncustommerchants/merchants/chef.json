@@ -1,7 +1,7 @@
 {
   "display_name": "Pastry Chef",
   "villager_biome": "minecraft:plains",
-  "villager_profession": "minecraft:farmer",
+  "villager_profession": "minecraft:librarian",
   "trades": [
     {
       "input": {
