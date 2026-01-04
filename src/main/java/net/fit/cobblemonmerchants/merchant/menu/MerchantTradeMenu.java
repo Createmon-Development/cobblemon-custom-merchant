@@ -3,6 +3,7 @@ package net.fit.cobblemonmerchants.merchant.menu;
 import net.fit.cobblemonmerchants.merchant.CustomMerchantEntity;
 import net.fit.cobblemonmerchants.network.SyncMerchantOffersPacket;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -145,18 +146,30 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         // Count how many of each required item the player has
         net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq = tradeEntry.input();
         int countA = 0;
-        for (ItemStack stack : player.getInventory().items) {
-            if (inputReq.matches(stack)) {
-                countA += stack.getCount();
+
+        // Special handling for relic coins - check bag too
+        if (isRelicCoin(inputReq)) {
+            countA = countRelicCoins(player);
+        } else {
+            for (ItemStack stack : player.getInventory().items) {
+                if (inputReq.matches(stack)) {
+                    countA += stack.getCount();
+                }
             }
         }
 
         int countB = 0;
         if (tradeEntry.secondInput().isPresent()) {
             net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondInputReq = tradeEntry.secondInput().get();
-            for (ItemStack stack : player.getInventory().items) {
-                if (secondInputReq.matches(stack)) {
-                    countB += stack.getCount();
+
+            // Special handling for relic coins - check bag too
+            if (isRelicCoin(secondInputReq)) {
+                countB = countRelicCoins(player);
+            } else {
+                for (ItemStack stack : player.getInventory().items) {
+                    if (secondInputReq.matches(stack)) {
+                        countB += stack.getCount();
+                    }
                 }
             }
         }
@@ -170,10 +183,19 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         }
 
         // Remove the cost items from player inventory
-        removeItemsMatching(player.getInventory(), inputReq, inputReq.getCount());
+        if (isRelicCoin(inputReq)) {
+            removeRelicCoins(player, inputReq.getCount());
+        } else {
+            removeItemsMatching(player.getInventory(), inputReq, inputReq.getCount());
+        }
+
         if (tradeEntry.secondInput().isPresent()) {
-            removeItemsMatching(player.getInventory(), tradeEntry.secondInput().get(),
-                tradeEntry.secondInput().get().getCount());
+            net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondInputReq = tradeEntry.secondInput().get();
+            if (isRelicCoin(secondInputReq)) {
+                removeRelicCoins(player, secondInputReq.getCount());
+            } else {
+                removeItemsMatching(player.getInventory(), secondInputReq, secondInputReq.getCount());
+            }
         }
 
         // Give the player the result item
@@ -200,12 +222,26 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         int countA = 0;
         int countB = 0;
 
-        for (ItemStack stack : player.getInventory().items) {
-            if (ItemStack.isSameItemSameComponents(stack, costA)) {
-                countA += stack.getCount();
+        // Special handling for relic coins - check bag too
+        if (isRelicCoin(costA)) {
+            countA = countRelicCoins(player);
+        } else {
+            for (ItemStack stack : player.getInventory().items) {
+                if (ItemStack.isSameItemSameComponents(stack, costA)) {
+                    countA += stack.getCount();
+                }
             }
-            if (!costB.isEmpty() && ItemStack.isSameItemSameComponents(stack, costB)) {
-                countB += stack.getCount();
+        }
+
+        if (!costB.isEmpty()) {
+            if (isRelicCoin(costB)) {
+                countB = countRelicCoins(player);
+            } else {
+                for (ItemStack stack : player.getInventory().items) {
+                    if (ItemStack.isSameItemSameComponents(stack, costB)) {
+                        countB += stack.getCount();
+                    }
+                }
             }
         }
 
@@ -216,9 +252,19 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             return false;
         }
 
-        removeItems(player.getInventory(), costA, costA.getCount());
+        // Remove items with special handling for relic coins
+        if (isRelicCoin(costA)) {
+            removeRelicCoins(player, costA.getCount());
+        } else {
+            removeItems(player.getInventory(), costA, costA.getCount());
+        }
+
         if (!costB.isEmpty()) {
-            removeItems(player.getInventory(), costB, costB.getCount());
+            if (isRelicCoin(costB)) {
+                removeRelicCoins(player, costB.getCount());
+            } else {
+                removeItems(player.getInventory(), costB, costB.getCount());
+            }
         }
 
         ItemStack result = offer.getResult().copy();
@@ -323,5 +369,85 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
                 }
             }
         }
+    }
+
+    /**
+     * Counts total relic coins available to the player (inventory + coin bag)
+     */
+    private int countRelicCoins(Player player) {
+        int count = 0;
+        ResourceLocation relicCoinId = ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin");
+
+        // Count coins in inventory
+        for (ItemStack stack : player.getInventory().items) {
+            ResourceLocation itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+            if (itemId.equals(relicCoinId)) {
+                count += stack.getCount();
+            }
+        }
+
+        // Count coins in bag
+        for (ItemStack stack : player.getInventory().items) {
+            if (stack.getItem() instanceof net.fit.cobblemonmerchants.item.custom.RelicCoinBagItem) {
+                int bagCoins = stack.getOrDefault(net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+                count += bagCoins;
+                break; // Only one bag should exist
+            }
+        }
+
+        return count;
+    }
+
+    /**
+     * Removes relic coins from player inventory and/or coin bag
+     */
+    private void removeRelicCoins(Player player, int amount) {
+        ResourceLocation relicCoinId = ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin");
+        int remaining = amount;
+
+        // First, try to remove from inventory
+        for (int i = 0; i < player.getInventory().items.size() && remaining > 0; i++) {
+            ItemStack stack = player.getInventory().items.get(i);
+            ResourceLocation itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+            if (itemId.equals(relicCoinId)) {
+                int removeCount = Math.min(remaining, stack.getCount());
+                stack.shrink(removeCount);
+                remaining -= removeCount;
+            }
+        }
+
+        // If still need more, remove from bag
+        if (remaining > 0) {
+            for (int i = 0; i < player.getInventory().items.size(); i++) {
+                ItemStack stack = player.getInventory().items.get(i);
+                if (stack.getItem() instanceof net.fit.cobblemonmerchants.item.custom.RelicCoinBagItem) {
+                    int bagCoins = stack.getOrDefault(net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+                    int removeCount = Math.min(remaining, bagCoins);
+                    stack.set(net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), bagCoins - removeCount);
+                    remaining -= removeCount;
+                    break; // Only one bag should exist
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if an ItemStack or ItemRequirement is for relic coins
+     */
+    private boolean isRelicCoin(ItemStack stack) {
+        ResourceLocation relicCoinId = ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin");
+        ResourceLocation itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return itemId.equals(relicCoinId);
+    }
+
+    private boolean isRelicCoin(net.fit.cobblemonmerchants.merchant.config.ItemRequirement requirement) {
+        ResourceLocation relicCoinId = ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin");
+        // Get the display stack and check if it's a relic coin
+        ItemStack displayStack = requirement.getDisplayStack();
+        if (displayStack.isEmpty()) {
+            return false;
+        }
+        ResourceLocation itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(displayStack.getItem());
+        return itemId.equals(relicCoinId);
     }
 }

@@ -90,9 +90,9 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         // Check if mouse is hovering over the center slot (16x16 area)
         if (mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16) {
             int coinCount = menu.getCoinCount();
-            String formattedCount = CoinCountRenderer.formatCoinCount(coinCount);
+            String formattedCount = CoinCountRenderer.formatCoinCountExact(coinCount);
 
-            // Create tooltip text
+            // Create tooltip text (exact count with commas)
             Component tooltip = Component.literal("Relic Coins: " + formattedCount)
                 .withStyle(net.minecraft.ChatFormatting.GOLD);
 
