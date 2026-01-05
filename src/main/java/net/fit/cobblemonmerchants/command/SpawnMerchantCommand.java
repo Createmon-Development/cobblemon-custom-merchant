@@ -128,6 +128,10 @@ public class SpawnMerchantCommand {
         BlockPos spawnPos = BlockPos.containing(position);
         merchant.setPos(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
 
+        // Set rotation to face the player who spawned it
+        merchant.setYRot(source.getRotation().y);
+        merchant.setYHeadRot(source.getRotation().y);
+
         // Configure merchant
         merchant.setCustomName(Component.literal(config.displayName()));
         merchant.setCustomNameVisible(true);

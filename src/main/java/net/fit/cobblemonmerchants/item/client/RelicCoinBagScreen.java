@@ -45,7 +45,7 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         guiGraphics.blit(TEXTURE, x, y + 3 * 18 + 17, 0, 126, this.imageWidth, 96);
 
         // Draw gray overlay covering all disabled slots and grid lines
-        // Strategy: Cover entire 3x9 grid except center slot (row 1, col 4)
+        // Strategy: Cover entire 3x9 grid except center column (col 4) middle 2 slots (coin and toggle)
         // Slot grid starts at (x+7, y+17) and each slot is 18x18 including borders
 
         // Draw three large sections to create a seamless flat gray texture
@@ -56,11 +56,9 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         // Section 2: Right side (columns 5-8, all 3 rows)
         guiGraphics.fill(x + 7 + 5 * 18, y + 17, x + 7 + 9 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
 
-        // Section 3: Center column above and below the coin slot
+        // Section 3: Center column above coin slot (row 0)
         // Column 4, row 0 (above coin)
         guiGraphics.fill(x + 7 + 4 * 18, y + 17, x + 7 + 5 * 18, y + 17 + 18, 0xAA8B8B8B);
-        // Column 4, row 2 (below coin)
-        guiGraphics.fill(x + 7 + 4 * 18, y + 17 + 2 * 18, x + 7 + 5 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
     }
 
     @Override
@@ -70,10 +68,16 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         // Render relic coin icon and count directly (like merchant GUI does)
         renderCoinSlot(guiGraphics);
 
+        // Render toggle button (green/red glass pane)
+        renderToggleButton(guiGraphics);
+
         this.renderTooltip(guiGraphics, mouseX, mouseY);
 
         // Render coin count tooltip when hovering over the center slot
         renderCoinTooltip(guiGraphics, mouseX, mouseY);
+
+        // Render toggle tooltip when hovering over the toggle slot
+        renderToggleTooltip(guiGraphics, mouseX, mouseY);
     }
 
     /**
@@ -154,5 +158,69 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         guiGraphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY, 0x404040, false);
         // Render "Inventory" label
         guiGraphics.drawString(this.font, this.playerInventoryTitle, this.inventoryLabelX, this.inventoryLabelY, 0x404040, false);
+    }
+
+    /**
+     * Renders the toggle button (green or red glass pane)
+     */
+    private void renderToggleButton(GuiGraphics guiGraphics) {
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+
+        // Toggle slot position (row 2, col 4)
+        int slotX = x + 8 + 4 * 18;
+        int slotY = y + 18 + 2 * 18;
+
+        // Get the appropriate glass pane based on vacuum mode state
+        boolean vacuumEnabled = menu.isAutoPickupEnabled();
+        net.minecraft.world.item.Item glassPane;
+
+        if (vacuumEnabled) {
+            // Green glass pane - vacuum mode ON
+            glassPane = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "lime_stained_glass_pane"));
+        } else {
+            // Red glass pane - vacuum mode OFF
+            glassPane = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "red_stained_glass_pane"));
+        }
+
+        if (glassPane != null && glassPane != net.minecraft.world.item.Items.AIR) {
+            ItemStack displayStack = new ItemStack(glassPane, 1);
+            guiGraphics.renderItem(displayStack, slotX, slotY);
+        }
+    }
+
+    /**
+     * Renders tooltip when hovering over the toggle button
+     */
+    private void renderToggleTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+
+        // Toggle slot position (row 2, col 4)
+        int slotX = x + 8 + 4 * 18;
+        int slotY = y + 18 + 2 * 18;
+
+        // Check if mouse is hovering over the toggle slot (16x16 area)
+        if (mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16) {
+            boolean vacuumEnabled = menu.isAutoPickupEnabled();
+
+            Component tooltip;
+            if (vacuumEnabled) {
+                tooltip = Component.literal("Vacuum Mode: ON")
+                    .withStyle(net.minecraft.ChatFormatting.GREEN)
+                    .append(Component.literal("\nCoins go directly to bag")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+            } else {
+                tooltip = Component.literal("Vacuum Mode: OFF")
+                    .withStyle(net.minecraft.ChatFormatting.RED)
+                    .append(Component.literal("\nCoins go to inventory")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+            }
+
+            // Render the tooltip
+            guiGraphics.renderTooltip(this.font, tooltip, mouseX, mouseY);
+        }
     }
 }

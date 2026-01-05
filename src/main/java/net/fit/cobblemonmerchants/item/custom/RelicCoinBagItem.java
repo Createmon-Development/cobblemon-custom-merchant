@@ -41,11 +41,121 @@ public class RelicCoinBagItem extends Item {
         ItemStack stack = player.getItemInHand(hand);
 
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
-            // Open the coin bag GUI
+            // If player is sneaking (shift-right-click), deposit all relic coins from inventory
+            if (player.isCrouching()) {
+                int coinsDeposited = depositAllCoins(serverPlayer, stack);
+                if (coinsDeposited > 0) {
+                    // Play pickup sound to indicate success
+                    player.playSound(net.minecraft.sounds.SoundEvents.ITEM_PICKUP, 0.5F, 1.0F);
+                    return InteractionResultHolder.success(stack);
+                }
+                // If no coins were deposited, still open the GUI
+            }
+
+            // Check if offhand is empty - if so, pull out a stack instead of opening GUI
+            InteractionHand otherHand = hand == InteractionHand.MAIN_HAND ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+            ItemStack otherHandStack = player.getItemInHand(otherHand);
+
+            if (otherHandStack.isEmpty() && !player.isCrouching()) {
+                // Try to withdraw a stack of coins
+                int withdrawn = withdrawCoins(serverPlayer, stack, 64);
+                if (withdrawn > 0) {
+                    // Play pickup sound
+                    player.playSound(net.minecraft.sounds.SoundEvents.ITEM_PICKUP, 0.5F, 1.0F);
+                    return InteractionResultHolder.success(stack);
+                }
+            }
+
+            // Normal right-click: open the coin bag GUI
             openBagScreen(serverPlayer, stack);
         }
 
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }
+
+    /**
+     * Withdraws coins from the bag and gives them to the player
+     * @param amount the maximum number of coins to withdraw
+     * @return the actual number of coins withdrawn
+     */
+    private int withdrawCoins(ServerPlayer player, ItemStack bagStack, int amount) {
+        int currentCoins = bagStack.getOrDefault(
+            net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+
+        if (currentCoins <= 0) {
+            return 0; // No coins to withdraw
+        }
+
+        // Calculate how many coins to withdraw
+        int toWithdraw = Math.min(currentCoins, amount);
+
+        // Get relic coin item
+        net.minecraft.world.item.Item relicCoinItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin"));
+
+        if (relicCoinItem == null || relicCoinItem == net.minecraft.world.item.Items.AIR) {
+            return 0;
+        }
+
+        // Create coin stack
+        ItemStack coinStack = new ItemStack(relicCoinItem, toWithdraw);
+
+        // Try to add to player's inventory
+        if (!player.getInventory().add(coinStack)) {
+            // Inventory full, drop at player's feet
+            player.drop(coinStack, false);
+        }
+
+        // Remove coins from bag
+        bagStack.set(
+            net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(),
+            currentCoins - toWithdraw);
+
+        return toWithdraw;
+    }
+
+    /**
+     * Deposits all relic coins from player's inventory into the bag
+     * @return the number of coins deposited
+     */
+    private int depositAllCoins(ServerPlayer player, ItemStack bagStack) {
+        int totalDeposited = 0;
+        net.minecraft.resources.ResourceLocation relicCoinId =
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin");
+
+        // Search through all inventory slots
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack slotStack = player.getInventory().getItem(i);
+
+            // Skip the bag itself
+            if (slotStack == bagStack) {
+                continue;
+            }
+
+            // Check if this slot contains relic coins
+            net.minecraft.resources.ResourceLocation itemId =
+                net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slotStack.getItem());
+
+            if (itemId != null && itemId.equals(relicCoinId)) {
+                // Add coins to bag
+                int coinCount = slotStack.getCount();
+                totalDeposited += coinCount;
+
+                // Remove coins from inventory
+                player.getInventory().removeItem(i, coinCount);
+            }
+        }
+
+        // Update bag's coin count if any were deposited
+        if (totalDeposited > 0) {
+            int currentCoins = bagStack.getOrDefault(
+                net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+            bagStack.set(
+                net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(),
+                currentCoins + totalDeposited);
+        }
+
+        return totalDeposited;
     }
 
     /**
@@ -99,6 +209,74 @@ public class RelicCoinBagItem extends Item {
 
         // Add blank line after flavor text
         tooltipComponents.add(Component.literal(""));
+
+        // Add usage hints
+        tooltipComponents.add(Component.literal("Right-click (empty offhand) to withdraw stack")
+            .withStyle(ChatFormatting.GRAY));
+        tooltipComponents.add(Component.literal("Shift + Right-click to deposit all coins")
+            .withStyle(ChatFormatting.GRAY));
+        tooltipComponents.add(Component.literal("Right-click with coins in cursor to deposit")
+            .withStyle(ChatFormatting.GRAY));
+        tooltipComponents.add(Component.literal("Right-click to open")
+            .withStyle(ChatFormatting.GRAY));
+    }
+
+    @Override
+    public boolean overrideStackedOnOther(@NotNull ItemStack bagStack, @NotNull net.minecraft.world.inventory.Slot slot, @NotNull net.minecraft.world.inventory.ClickAction action, @NotNull Player player) {
+        // Handle right-clicking on the bag with coins in cursor
+        if (action == net.minecraft.world.inventory.ClickAction.SECONDARY) {
+            ItemStack slotStack = slot.getItem();
+
+            // Check if the slot contains relic coins
+            net.minecraft.resources.ResourceLocation itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slotStack.getItem());
+            if (itemId != null && itemId.toString().equals("cobblemon:relic_coin")) {
+                // Deposit coins from slot into bag
+                int coinCount = slotStack.getCount();
+                int currentCoins = bagStack.getOrDefault(
+                    net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+                bagStack.set(
+                    net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(),
+                    currentCoins + coinCount);
+
+                // Remove coins from slot
+                slot.set(ItemStack.EMPTY);
+
+                // Play pickup sound
+                player.playSound(net.minecraft.sounds.SoundEvents.ITEM_PICKUP, 0.5F, 1.0F);
+
+                return true; // Handled
+            }
+        }
+
+        return super.overrideStackedOnOther(bagStack, slot, action, player);
+    }
+
+    @Override
+    public boolean overrideOtherStackedOnMe(@NotNull ItemStack bagStack, @NotNull ItemStack otherStack, @NotNull net.minecraft.world.inventory.Slot slot, @NotNull net.minecraft.world.inventory.ClickAction action, @NotNull Player player, @NotNull net.minecraft.world.entity.SlotAccess cursorStackReference) {
+        // Handle clicking coins on the bag in inventory
+        if (action == net.minecraft.world.inventory.ClickAction.SECONDARY && !otherStack.isEmpty()) {
+            // Check if the other stack is relic coins
+            net.minecraft.resources.ResourceLocation itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(otherStack.getItem());
+            if (itemId != null && itemId.toString().equals("cobblemon:relic_coin")) {
+                // Deposit coins into bag
+                int coinCount = otherStack.getCount();
+                int currentCoins = bagStack.getOrDefault(
+                    net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+                bagStack.set(
+                    net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(),
+                    currentCoins + coinCount);
+
+                // Remove coins from cursor
+                cursorStackReference.set(ItemStack.EMPTY);
+
+                // Play pickup sound
+                player.playSound(net.minecraft.sounds.SoundEvents.ITEM_PICKUP, 0.5F, 1.0F);
+
+                return true; // Handled
+            }
+        }
+
+        return super.overrideOtherStackedOnMe(bagStack, otherStack, slot, action, player, cursorStackReference);
     }
 
     @Override

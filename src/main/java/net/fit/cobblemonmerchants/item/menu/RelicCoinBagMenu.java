@@ -32,9 +32,13 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
         this.bagStack = bagStack;
         this.bagSlot = playerInventory.selected;
 
-        // Add coin withdraw slot in the center (slot 13 = row 1, col 4)
+        // Add coin withdraw slot in the center (slot 0, row 1, col 4)
         // X = 8 + (4 * 18) = 80, Y = 18 + (1 * 18) = 36
         this.addSlot(new CoinWithdrawSlot(this, 80, 36));
+
+        // Add toggle button slot (slot 1, row 2, col 4 - directly below coin slot)
+        // X = 8 + (4 * 18) = 80, Y = 18 + (2 * 18) = 54
+        this.addSlot(new ToggleSlot(this, 80, 54));
 
         // Add player inventory slots
         addPlayerInventorySlots(playerInventory);
@@ -91,8 +95,37 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
         return false;
     }
 
+    /**
+     * Gets the auto-pickup toggle state
+     * @return true if auto-pickup is enabled, false otherwise
+     */
+    public boolean isAutoPickupEnabled() {
+        return bagStack.getOrDefault(ModDataComponents.AUTO_PICKUP_ENABLED.get(), false);
+    }
+
+    /**
+     * Sets the auto-pickup toggle state
+     */
+    public void setAutoPickupEnabled(boolean enabled) {
+        bagStack.set(ModDataComponents.AUTO_PICKUP_ENABLED.get(), enabled);
+    }
+
+    /**
+     * Toggles the auto-pickup state
+     */
+    public void toggleAutoPickup() {
+        setAutoPickupEnabled(!isAutoPickupEnabled());
+    }
+
     @Override
     public void clicked(int slotId, int button, @NotNull net.minecraft.world.inventory.ClickType clickType, @NotNull Player player) {
+        // Handle clicking on the toggle slot (slot 1)
+        if (slotId == 1) {
+            // Toggle auto-pickup on any click
+            toggleAutoPickup();
+            return;
+        }
+
         // Handle special clicking for the coin withdraw slot (slot 0)
         if (slotId == 0) {
             // Don't allow interaction if bag has 0 coins
@@ -243,8 +276,8 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
 
         ItemStack slotStack = slot.getItem();
 
-        // Slot 0 is handled by clicked() method
-        if (index == 0) {
+        // Slots 0 and 1 are handled by clicked() method (coin slot and toggle slot)
+        if (index == 0 || index == 1) {
             return ItemStack.EMPTY;
         }
 
@@ -268,16 +301,16 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
         }
 
         // Not a relic coin - try normal shift-click behavior to move it around inventory
-        if (index >= 1 && index < this.slots.size()) {
+        if (index >= 2 && index < this.slots.size()) {
             // From player inventory to hotbar or vice versa
-            if (index < 28) {
+            if (index < 29) {
                 // From main inventory to hotbar
-                if (!this.moveItemStackTo(slotStack, 28, 37, false)) {
+                if (!this.moveItemStackTo(slotStack, 29, 38, false)) {
                     return ItemStack.EMPTY;
                 }
             } else {
                 // From hotbar to main inventory
-                if (!this.moveItemStackTo(slotStack, 1, 28, false)) {
+                if (!this.moveItemStackTo(slotStack, 2, 29, false)) {
                     return ItemStack.EMPTY;
                 }
             }
