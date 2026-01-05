@@ -24,12 +24,33 @@ import java.util.Map;
 
 /**
  * Command for spawning merchants: /spawnmerchant <merchant_type> [villager_biome] [villager_profession] [variant]
+ * Use "_" as a placeholder for biome/profession to use the config default.
+ * Example: /spawnmerchant cobblemoncustommerchants:gambler _ _ housed
  */
 public class SpawnMerchantCommand {
 
     private static final SuggestionProvider<CommandSourceStack> MERCHANT_TYPE_SUGGESTIONS = (context, builder) -> {
         Map<ResourceLocation, MerchantConfig> configs = MerchantConfigRegistry.getAllConfigs();
         return SharedSuggestionProvider.suggestResource(configs.keySet(), builder);
+    };
+
+    private static final SuggestionProvider<CommandSourceStack> BIOME_SUGGESTIONS = (context, builder) -> {
+        // Suggest "_" for default plus common biomes
+        return SharedSuggestionProvider.suggest(new String[]{
+            "_", "minecraft:plains", "minecraft:desert", "minecraft:jungle",
+            "minecraft:savanna", "minecraft:snow", "minecraft:swamp", "minecraft:taiga"
+        }, builder);
+    };
+
+    private static final SuggestionProvider<CommandSourceStack> PROFESSION_SUGGESTIONS = (context, builder) -> {
+        // Suggest "_" for default plus common professions
+        return SharedSuggestionProvider.suggest(new String[]{
+            "_", "minecraft:none", "minecraft:armorer", "minecraft:butcher",
+            "minecraft:cartographer", "minecraft:cleric", "minecraft:farmer",
+            "minecraft:fisherman", "minecraft:fletcher", "minecraft:leatherworker",
+            "minecraft:librarian", "minecraft:mason", "minecraft:nitwit",
+            "minecraft:shepherd", "minecraft:toolsmith", "minecraft:weaponsmith"
+        }, builder);
     };
 
     private static final SuggestionProvider<CommandSourceStack> VARIANT_SUGGESTIONS = (context, builder) -> {
@@ -44,9 +65,11 @@ public class SpawnMerchantCommand {
                 .then(Commands.argument("merchant_type", ResourceLocationArgument.id())
                     .suggests(MERCHANT_TYPE_SUGGESTIONS)
                     .executes(SpawnMerchantCommand::spawnMerchant)
-                    .then(Commands.argument("villager_biome", ResourceLocationArgument.id())
+                    .then(Commands.argument("villager_biome", StringArgumentType.word())
+                        .suggests(BIOME_SUGGESTIONS)
                         .executes(SpawnMerchantCommand::spawnMerchantWithBiome)
-                        .then(Commands.argument("villager_profession", ResourceLocationArgument.id())
+                        .then(Commands.argument("villager_profession", StringArgumentType.word())
+                            .suggests(PROFESSION_SUGGESTIONS)
                             .executes(SpawnMerchantCommand::spawnMerchantWithProfession)
                             .then(Commands.argument("variant", StringArgumentType.word())
                                 .suggests(VARIANT_SUGGESTIONS)
@@ -63,21 +86,21 @@ public class SpawnMerchantCommand {
     }
 
     private static int spawnMerchantWithBiome(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        ResourceLocation biome = ResourceLocationArgument.getId(context, "villager_biome");
-        return spawnMerchantInternal(context, biome.toString(), null, null);
+        String biome = StringArgumentType.getString(context, "villager_biome");
+        return spawnMerchantInternal(context, biome, null, null);
     }
 
     private static int spawnMerchantWithProfession(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        ResourceLocation biome = ResourceLocationArgument.getId(context, "villager_biome");
-        ResourceLocation profession = ResourceLocationArgument.getId(context, "villager_profession");
-        return spawnMerchantInternal(context, biome.toString(), profession.toString(), null);
+        String biome = StringArgumentType.getString(context, "villager_biome");
+        String profession = StringArgumentType.getString(context, "villager_profession");
+        return spawnMerchantInternal(context, biome, profession, null);
     }
 
     private static int spawnMerchantWithVariant(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        ResourceLocation biome = ResourceLocationArgument.getId(context, "villager_biome");
-        ResourceLocation profession = ResourceLocationArgument.getId(context, "villager_profession");
+        String biome = StringArgumentType.getString(context, "villager_biome");
+        String profession = StringArgumentType.getString(context, "villager_profession");
         String variant = StringArgumentType.getString(context, "variant");
-        return spawnMerchantInternal(context, biome.toString(), profession.toString(), variant);
+        return spawnMerchantInternal(context, biome, profession, variant);
     }
 
     private static int spawnMerchantInternal(CommandContext<CommandSourceStack> context,
@@ -94,9 +117,9 @@ public class SpawnMerchantCommand {
             return 0;
         }
 
-        // Treat "-" as placeholder (use config default)
-        if ("-".equals(overrideBiome)) overrideBiome = null;
-        if ("-".equals(overrideProfession)) overrideProfession = null;
+        // Treat "_" or "-" as placeholder (use config default)
+        if ("_".equals(overrideBiome) || "-".equals(overrideBiome)) overrideBiome = null;
+        if ("_".equals(overrideProfession) || "-".equals(overrideProfession)) overrideProfession = null;
 
         // Create merchant entity
         CustomMerchantEntity merchant = new CustomMerchantEntity(ModEntities.CUSTOM_MERCHANT.get(), level);
