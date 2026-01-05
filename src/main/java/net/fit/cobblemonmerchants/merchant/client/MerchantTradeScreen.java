@@ -3,6 +3,8 @@ package net.fit.cobblemonmerchants.merchant.client;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.fit.cobblemonmerchants.CobblemonMerchants;
 import net.fit.cobblemonmerchants.merchant.menu.MerchantTradeMenu;
+import net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager;
+import net.fit.cobblemonmerchants.network.ClaimDailyRewardPacket;
 import net.fit.cobblemonmerchants.network.TradeClickPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -32,6 +34,13 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     private static final int TRADES_PER_ROW = 9;
     private static final int MAX_VISIBLE_ROWS = 3; // Single chest has 3 rows
 
+    // Timer for live countdown updates
+    private long lastTimerUpdate = 0;
+    private static final long TIMER_UPDATE_INTERVAL_MS = 1000; // Update every second
+
+    // Animation tick for shimmer effect
+    private float shimmerTick = 0;
+
     public MerchantTradeScreen(MerchantTradeMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
         // Vanilla chest dimensions: 176 width, 166 height (for 3 rows)
@@ -58,6 +67,17 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
+        // Update shimmer animation
+        shimmerTick += partialTick;
+
+        // Update timer periodically for live countdown
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastTimerUpdate > TIMER_UPDATE_INTERVAL_MS) {
+            lastTimerUpdate = currentTime;
+            // Update the time display from local calculation
+            menu.updateTimeUntilReset(DailyRewardManager.getFormattedTimeUntilReset());
+        }
+
         // Render trade items
         renderTradeItems(guiGraphics, mouseX, mouseY);
 
@@ -76,6 +96,11 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
         // Build position mapping: position -> trade index
         java.util.Map<Integer, Integer> positionMap = new java.util.HashMap<>();
         java.util.Set<Integer> usedPositions = new java.util.HashSet<>();
+
+        // Reserve daily reward position
+        if (menu.hasDailyRewardDisplay() && menu.getDailyRewardPosition() >= 0) {
+            usedPositions.add(menu.getDailyRewardPosition());
+        }
 
         for (int i = 0; i < tradeEntries.size() && i < offers.size(); i++) {
             net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry = tradeEntries.get(i);
@@ -132,6 +157,73 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
             usedPositions.add(nextAvailablePosition);
             nextAvailablePosition++;
         }
+
+        // Render daily reward item if configured
+        renderDailyReward(guiGraphics, x, y);
+    }
+
+    /**
+     * Renders the daily reward item at its configured position with shimmer or grey overlay
+     */
+    private void renderDailyReward(GuiGraphics guiGraphics, int baseX, int baseY) {
+        if (!menu.hasDailyRewardDisplay() || menu.getDailyRewardPosition() < 0) {
+            return;
+        }
+
+        int position = menu.getDailyRewardPosition();
+        int row = position / TRADES_PER_ROW;
+        int col = position % TRADES_PER_ROW;
+        int slotX = baseX + 8 + col * 18;
+        int slotY = baseY + 18 + row * 18;
+
+        ItemStack rewardItem = menu.getDailyRewardItem();
+        boolean claimed = menu.isDailyRewardClaimed();
+
+        // Render the item
+        guiGraphics.renderItem(rewardItem, slotX, slotY);
+        guiGraphics.renderItemDecorations(this.font, rewardItem, slotX, slotY);
+
+        if (claimed) {
+            // Grey semi-transparent overlay when already claimed
+            guiGraphics.fill(slotX, slotY, slotX + 16, slotY + 16, 0xAA808080);
+        } else {
+            // Shimmer effect when available - animated golden glow
+            renderShimmerEffect(guiGraphics, slotX, slotY);
+        }
+    }
+
+    /**
+     * Renders an animated shimmer/glow effect around a slot
+     */
+    private void renderShimmerEffect(GuiGraphics guiGraphics, int slotX, int slotY) {
+        // Calculate shimmer intensity using sine wave for smooth pulsing
+        float shimmerPhase = (shimmerTick * 0.1f) % (float)(Math.PI * 2);
+        float shimmerIntensity = (float)(Math.sin(shimmerPhase) * 0.5 + 0.5); // 0.0 to 1.0
+
+        // Gold color with varying alpha for shimmer effect
+        int baseAlpha = 80; // Minimum visibility
+        int maxAlpha = 180; // Maximum visibility
+        int alpha = (int)(baseAlpha + (maxAlpha - baseAlpha) * shimmerIntensity);
+
+        // Golden color: RGB(255, 215, 0) with animated alpha
+        int shimmerColor = (alpha << 24) | 0xFFD700;
+
+        // Draw shimmering border (1 pixel thick)
+        // Top edge
+        guiGraphics.fill(slotX - 1, slotY - 1, slotX + 17, slotY, shimmerColor);
+        // Bottom edge
+        guiGraphics.fill(slotX - 1, slotY + 16, slotX + 17, slotY + 17, shimmerColor);
+        // Left edge
+        guiGraphics.fill(slotX - 1, slotY, slotX, slotY + 16, shimmerColor);
+        // Right edge
+        guiGraphics.fill(slotX + 16, slotY, slotX + 17, slotY + 16, shimmerColor);
+
+        // Optional: Add a subtle inner glow at peak shimmer
+        if (shimmerIntensity > 0.7f) {
+            int innerAlpha = (int)((shimmerIntensity - 0.7f) / 0.3f * 40);
+            int innerColor = (innerAlpha << 24) | 0xFFD700;
+            guiGraphics.fill(slotX, slotY, slotX + 16, slotY + 16, innerColor);
+        }
     }
 
     private void renderSingleTrade(GuiGraphics guiGraphics, MerchantOffer offer,
@@ -175,6 +267,13 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     protected void renderTooltip(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
         super.renderTooltip(guiGraphics, mouseX, mouseY);
 
+        // Check if hovering over daily reward
+        if (isHoveringDailyReward(mouseX, mouseY)) {
+            List<Component> tooltip = createDailyRewardTooltip();
+            guiGraphics.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
+            return;
+        }
+
         // Check if hovering over a trade item
         int hoveredTradeIndex = getHoveredTradeIndex(mouseX, mouseY);
         if (hoveredTradeIndex >= 0) {
@@ -186,6 +285,60 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
                 guiGraphics.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
             }
         }
+    }
+
+    /**
+     * Checks if the mouse is hovering over the daily reward slot
+     */
+    private boolean isHoveringDailyReward(int mouseX, int mouseY) {
+        if (!menu.hasDailyRewardDisplay() || menu.getDailyRewardPosition() < 0) {
+            return false;
+        }
+
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+
+        int position = menu.getDailyRewardPosition();
+        int row = position / TRADES_PER_ROW;
+        int col = position % TRADES_PER_ROW;
+        int slotX = x + 8 + col * 18;
+        int slotY = y + 18 + row * 18;
+
+        return mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16;
+    }
+
+    /**
+     * Creates the tooltip for the daily reward item
+     */
+    private List<Component> createDailyRewardTooltip() {
+        List<Component> tooltip = new ArrayList<>();
+
+        ItemStack rewardItem = menu.getDailyRewardItem();
+        boolean claimed = menu.isDailyRewardClaimed();
+        int minCount = menu.getDailyRewardMinCount();
+        int maxCount = menu.getDailyRewardMaxCount();
+
+        tooltip.add(Component.literal("§6Daily Reward"));
+        tooltip.add(Component.empty());
+
+        // Show count range if min != max, otherwise show single count
+        String countText;
+        if (minCount == maxCount) {
+            countText = minCount + "x";
+        } else {
+            countText = minCount + "-" + maxCount + "x";
+        }
+        tooltip.add(Component.literal("§7Reward: §f" + countText + " " + rewardItem.getHoverName().getString()));
+        tooltip.add(Component.empty());
+
+        if (claimed) {
+            tooltip.add(Component.literal("§cAlready claimed today!"));
+            tooltip.add(Component.literal("§7Resets in: §e" + menu.getTimeUntilReset()));
+        } else {
+            tooltip.add(Component.literal("§aClick to claim!"));
+        }
+
+        return tooltip;
     }
 
     /**
@@ -414,6 +567,32 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) { // Left click
+            // Check if clicking on daily reward first
+            if (isHoveringDailyReward((int) mouseX, (int) mouseY)) {
+                if (!menu.isDailyRewardClaimed()) {
+                    // Send packet to claim the daily reward
+                    ClaimDailyRewardPacket.send();
+
+                    // Optimistically update UI (server will validate)
+                    menu.setDailyRewardClaimed(true);
+
+                    // Play a click sound
+                    Minecraft.getInstance().getSoundManager().play(
+                        net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                            SoundEvents.UI_BUTTON_CLICK.value(), 1.0F, 1.0F
+                        )
+                    );
+                } else {
+                    // Already claimed - play error sound
+                    Minecraft.getInstance().getSoundManager().play(
+                        net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                            SoundEvents.VILLAGER_NO, 0.5F, 1.0F
+                        )
+                    );
+                }
+                return true;
+            }
+
             int tradeIndex = getHoveredTradeIndex((int) mouseX, (int) mouseY);
             if (tradeIndex >= 0) {
                 // Send packet to server to execute trade

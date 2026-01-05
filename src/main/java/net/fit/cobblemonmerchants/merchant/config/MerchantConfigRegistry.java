@@ -60,7 +60,15 @@ public class MerchantConfigRegistry extends SimpleJsonResourceReloadListener {
 
                 MerchantConfig config = result.result().get();
                 configs.put(id, config);
-                CobblemonMerchants.LOGGER.info("Loaded merchant config: {}", id);
+                CobblemonMerchants.LOGGER.info("Loaded merchant config: {} (hasDailyReward={})", id, config.dailyRewardConfig().isPresent());
+                if (config.dailyRewardConfig().isPresent()) {
+                    var dailyConfig = config.dailyRewardConfig().get();
+                    CobblemonMerchants.LOGGER.info("  Daily reward variants: {}", dailyConfig.variants().keySet());
+                    for (var varEntry : dailyConfig.variants().entrySet()) {
+                        CobblemonMerchants.LOGGER.info("    Variant '{}': displayPosition={}",
+                            varEntry.getKey(), varEntry.getValue().displayPosition());
+                    }
+                }
 
                 // Check if this is the black_market config and load its settings
                 if (id.getPath().contains("black_market")) {

@@ -41,6 +41,7 @@ public class CustomMerchantEntity extends Villager {
     private static final String TAG_VILLAGER_BIOME = "VillagerBiome";
     private static final String TAG_VILLAGER_PROFESSION = "VillagerProfession";
     private static final String TAG_OFFERS = "Offers";
+    private static final String TAG_VARIANT = "Variant";
 
     private static final EntityDataAccessor<String> DATA_PLAYER_SKIN_NAME =
         SynchedEntityData.defineId(CustomMerchantEntity.class, EntityDataSerializers.STRING);
@@ -50,6 +51,7 @@ public class CustomMerchantEntity extends Villager {
     private MerchantOffers offers = new MerchantOffers();
     private java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries = new java.util.ArrayList<>();
     private Player tradingPlayer;
+    private String variant = "default"; // The variant of this merchant (affects daily rewards)
 
     public CustomMerchantEntity(EntityType<? extends Villager> entityType, Level level) {
         super(entityType, level);
@@ -156,6 +158,14 @@ public class CustomMerchantEntity extends Villager {
         return this.tradingPlayer;
     }
 
+    public void setMerchantVariant(String variant) {
+        this.variant = variant != null ? variant : "default";
+    }
+
+    public String getMerchantVariant() {
+        return this.variant;
+    }
+
     public void setOffers(MerchantOffers offers) {
         this.offers = offers;
     }
@@ -260,7 +270,74 @@ public class CustomMerchantEntity extends Villager {
                     buf.writeInt(entry.position().get());
                 }
             }
+
+            // Sync daily reward info to client
+            writeDailyRewardInfo(buf, serverPlayer);
         });
+    }
+
+    /**
+     * Writes daily reward display info to the packet buffer
+     */
+    private void writeDailyRewardInfo(net.minecraft.network.FriendlyByteBuf buf, net.minecraft.server.level.ServerPlayer player) {
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("writeDailyRewardInfo: traderId={}, variant={}", this.traderId, this.variant);
+
+        if (this.traderId == null || !(this.level() instanceof ServerLevel serverLevel)) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("writeDailyRewardInfo: No traderId or not ServerLevel");
+            buf.writeBoolean(false); // No daily reward
+            return;
+        }
+
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig config =
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(this.traderId);
+
+        if (config == null || config.dailyRewardConfig().isEmpty()) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("writeDailyRewardInfo: No config or no dailyRewardConfig. config={}, hasDailyReward={}",
+                config != null, config != null && config.dailyRewardConfig().isPresent());
+            buf.writeBoolean(false); // No daily reward
+            return;
+        }
+
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig.DailyRewardConfig dailyConfig =
+            config.dailyRewardConfig().get();
+
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("writeDailyRewardInfo: Looking for variant '{}' in variants: {}",
+            this.variant, dailyConfig.variants().keySet());
+
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig.DailyRewardVariant rewardVariant =
+            dailyConfig.getVariant(this.variant);
+
+        if (rewardVariant == null || rewardVariant.displayPosition().isEmpty()) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("writeDailyRewardInfo: No rewardVariant or no displayPosition. rewardVariant={}, hasDisplayPos={}",
+                rewardVariant != null, rewardVariant != null && rewardVariant.displayPosition().isPresent());
+            buf.writeBoolean(false); // No display position configured
+            return;
+        }
+
+        // Check if player has already claimed today
+        net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager rewardManager =
+            net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager.get(serverLevel);
+
+        String merchantId = this.traderId.toString();
+        // If sharedCooldown is true (default), pass null for entityUUID so all merchants share cooldown
+        // If sharedCooldown is false, pass this entity's UUID for per-entity tracking
+        java.util.UUID entityUUIDForCooldown = dailyConfig.sharedCooldown() ? null : this.getUUID();
+        boolean hasClaimed = rewardManager.hasClaimedToday(player.getUUID(), merchantId, entityUUIDForCooldown);
+
+        buf.writeBoolean(true); // Has daily reward display
+        net.minecraft.network.RegistryFriendlyByteBuf registryBuf = (net.minecraft.network.RegistryFriendlyByteBuf) buf;
+        net.minecraft.world.item.ItemStack.STREAM_CODEC.encode(registryBuf, rewardVariant.item());
+        buf.writeInt(rewardVariant.displayPosition().get());
+        buf.writeBoolean(hasClaimed);
+        buf.writeUtf(net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager.getFormattedTimeUntilReset());
+        buf.writeInt(rewardVariant.minCount());
+        buf.writeInt(rewardVariant.maxCount());
+        buf.writeBoolean(dailyConfig.sharedCooldown());
+        // Write entity UUID for per-entity cooldown tracking
+        buf.writeUUID(this.getUUID());
+
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("writeDailyRewardInfo: SUCCESS! position={}, claimed={}, sharedCooldown={}, entityUUID={}, item={}, minCount={}, maxCount={}",
+            rewardVariant.displayPosition().get(), hasClaimed, dailyConfig.sharedCooldown(), this.getUUID(), rewardVariant.item(), rewardVariant.minCount(), rewardVariant.maxCount());
     }
 
     @Override
@@ -342,6 +419,7 @@ public class CustomMerchantEntity extends Villager {
             tag.putString(TAG_TRADER_ID, this.traderId.toString());
         }
         tag.putString(TAG_MERCHANT_TYPE, this.merchantType.name());
+        tag.putString(TAG_VARIANT, this.variant);
         String skinName = getPlayerSkinName();
         if (!skinName.isEmpty()) {
             tag.putString(TAG_PLAYER_SKIN_NAME, skinName);
@@ -374,6 +452,9 @@ public class CustomMerchantEntity extends Villager {
             } catch (IllegalArgumentException e) {
                 this.merchantType = MerchantType.REGULAR;
             }
+        }
+        if (tag.contains(TAG_VARIANT)) {
+            this.variant = tag.getString(TAG_VARIANT);
         }
         if (tag.contains(TAG_PLAYER_SKIN_NAME)) {
             setPlayerSkinName(tag.getString(TAG_PLAYER_SKIN_NAME));
@@ -412,7 +493,7 @@ public class CustomMerchantEntity extends Villager {
     }
 
     /**
-     * Reloads trades from the config registry.
+     * Reloads trades from the config registry, filtering by this merchant's variant.
      * Only applicable for REGULAR merchants (Black Market generates trades dynamically).
      * Call this after datapack reload to update merchant trades.
      */
@@ -425,10 +506,11 @@ public class CustomMerchantEntity extends Villager {
             net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(this.traderId);
 
         if (config != null) {
-            this.offers = config.toMerchantOffers();
-            this.tradeEntries = new java.util.ArrayList<>(config.trades());
-            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Reloaded {} trades for merchant: {}",
-                this.offers.size(), this.traderId);
+            // Filter trades by this merchant's variant
+            this.offers = config.toMerchantOffersForVariant(this.variant);
+            this.tradeEntries = new java.util.ArrayList<>(config.getTradesForVariant(this.variant));
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Reloaded {} trades for merchant: {} (variant: {})",
+                this.offers.size(), this.traderId, this.variant);
         } else {
             net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn("Config not found for merchant: {}", this.traderId);
         }

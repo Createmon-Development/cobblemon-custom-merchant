@@ -11,6 +11,11 @@
       "output": {
         "id": "cobblemonpokeboxes:pokeball_pokebox",
         "count": 1
+      },
+      "variant_overrides": {
+        "housed": {
+          "input_count": 10
+        }
       }
     },
     {
@@ -21,6 +26,11 @@
       "output": {
         "id": "cobblemonpokeboxes:greatball_pokebox",
         "count": 1
+      },
+      "variant_overrides": {
+        "housed": {
+          "input_count": 25
+        }
       }
     },
     {
@@ -33,5 +43,30 @@
         "count": 1
       }
     }
-  ]
+  ],
+  "daily_reward": {
+    "shared_cooldown": false,
+    "variants": {
+      "default": {
+        "item": {
+          "id": "cobblemonpokeboxes:pokeball_pokebox",
+          "count": 1
+        },
+        "min_count": 1,
+        "max_count": 1,
+        "message": "The Gambler hands you a free Pokebox! Come back tomorrow for more.",
+        "display_position": 26
+      },
+      "housed": {
+        "item": {
+          "id": "cobblemonpokeboxes:pokeball_pokebox",
+          "count": 1
+        },
+        "min_count": 1,
+        "max_count": 3,
+        "message": "The Gambler is feeling generous in their home! Here's %d Pokebox(es)!",
+        "display_position": 26
+      }
+    }
+  }
 }

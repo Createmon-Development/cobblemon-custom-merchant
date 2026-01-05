@@ -20,6 +20,12 @@ public class ModNetworking {
             TradeClickPacket::handle
         );
 
+        registrar.playToServer(
+            ClaimDailyRewardPacket.TYPE,
+            ClaimDailyRewardPacket.STREAM_CODEC,
+            ClaimDailyRewardPacket::handle
+        );
+
         // Server to client packets
         registrar.playToClient(
             SyncMerchantOffersPacket.TYPE,
