@@ -105,13 +105,20 @@ public class CoinWithdrawSlot extends Slot {
 
     @Override
     public @NotNull ItemStack getItem() {
-        // Return empty - rendering is handled by screen
+        // Return a display item if there are coins, so vanilla knows there's something to click
+        if (menu.getCoinCount() > 0) {
+            net.minecraft.world.item.Item relicCoinItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+                ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin"));
+            if (relicCoinItem != null && relicCoinItem != net.minecraft.world.item.Items.AIR) {
+                return new ItemStack(relicCoinItem, 1);
+            }
+        }
         return ItemStack.EMPTY;
     }
 
     @Override
     public boolean hasItem() {
-        // Return false - no actual item in slot
-        return false;
+        // Return true if there are coins available
+        return menu.getCoinCount() > 0;
     }
 }

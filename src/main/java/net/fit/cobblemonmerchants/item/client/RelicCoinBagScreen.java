@@ -66,6 +66,8 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         // Render relic coin icon and count directly (like merchant GUI does)
+        // This is called every frame, so it will update in real-time
+        // NOTE: We render this AFTER super.render() so it appears on top
         renderCoinSlot(guiGraphics);
 
         // Render toggle button (green/red glass pane)
@@ -78,6 +80,21 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
 
         // Render toggle tooltip when hovering over the toggle slot
         renderToggleTooltip(guiGraphics, mouseX, mouseY);
+    }
+
+    @Override
+    protected void renderSlot(@NotNull GuiGraphics guiGraphics, @NotNull net.minecraft.world.inventory.Slot slot) {
+        // Skip rendering for coin slot (slot 0) and toggle slot (slot 1) - we handle those manually
+        if (slot.index == 0 || slot.index == 1) {
+            return;
+        }
+        super.renderSlot(guiGraphics, slot);
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        // Force the screen to refresh every tick to show real-time coin count updates
     }
 
     /**
@@ -171,16 +188,16 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         int slotX = x + 8 + 4 * 18;
         int slotY = y + 18 + 2 * 18;
 
-        // Get the appropriate glass pane based on vacuum mode state
-        boolean vacuumEnabled = menu.isAutoPickupEnabled();
+        // Get the appropriate glass pane based on autoPickup mode state
+        boolean autoPickupEnabled = menu.isAutoPickupEnabled();
         net.minecraft.world.item.Item glassPane;
 
-        if (vacuumEnabled) {
-            // Green glass pane - vacuum mode ON
+        if (autoPickupEnabled) {
+            // Green glass pane - auto pickup mode ON
             glassPane = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
                 net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "lime_stained_glass_pane"));
         } else {
-            // Red glass pane - vacuum mode OFF
+            // Red glass pane - auto pickup mode OFF
             glassPane = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
                 net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "red_stained_glass_pane"));
         }
@@ -204,19 +221,15 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
 
         // Check if mouse is hovering over the toggle slot (16x16 area)
         if (mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16) {
-            boolean vacuumEnabled = menu.isAutoPickupEnabled();
+            boolean autoPickupEnabled = menu.isAutoPickupEnabled();
 
             Component tooltip;
-            if (vacuumEnabled) {
-                tooltip = Component.literal("Vacuum Mode: ON")
-                    .withStyle(net.minecraft.ChatFormatting.GREEN)
-                    .append(Component.literal("\nCoins go directly to bag")
-                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+            if (autoPickupEnabled) {
+                tooltip = Component.literal("Auto Pickup: ON")
+                    .withStyle(net.minecraft.ChatFormatting.GREEN);
             } else {
-                tooltip = Component.literal("Vacuum Mode: OFF")
-                    .withStyle(net.minecraft.ChatFormatting.RED)
-                    .append(Component.literal("\nCoins go to inventory")
-                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+                tooltip = Component.literal("Auto Pickup: OFF")
+                    .withStyle(net.minecraft.ChatFormatting.RED);
             }
 
             // Render the tooltip

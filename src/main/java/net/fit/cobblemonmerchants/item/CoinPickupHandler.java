@@ -13,15 +13,15 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 
 /**
- * Handles vacuum mode for relic coins
- * When vacuum mode is enabled (green pane - default), coins go directly to bag
+ * Handles auto pickup mode for relic coins
+ * When auto pickup mode is enabled (green pane - default), coins go directly to bag
  * When disabled (red pane), coins go to inventory normally
  */
 @EventBusSubscriber(modid = CobblemonMerchants.MODID)
 public class CoinPickupHandler {
 
     /**
-     * Handle coin pickup to redirect to bag if vacuum mode is enabled
+     * Handle coin pickup to redirect to bag if auto pickup mode is enabled
      * Runs before pickup to prevent coins from entering inventory
      */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -51,25 +51,29 @@ public class CoinPickupHandler {
             return;
         }
 
-        // Check vacuum mode setting (default is true - enabled)
-        boolean vacuumEnabled = bagStack.getOrDefault(ModDataComponents.AUTO_PICKUP_ENABLED.get(), true);
+        // Check auto pickup mode setting (default is true - enabled)
+        boolean autoPickupEnabled = bagStack.getOrDefault(ModDataComponents.AUTO_PICKUP_ENABLED.get(), true);
 
-        if (!vacuumEnabled) {
-            // Vacuum disabled: coins go to inventory (allow normal pickup)
+        if (!autoPickupEnabled) {
+            // Auto pickup disabled: coins go to inventory (allow normal pickup)
             return;
         }
 
-        // Vacuum enabled: prevent pickup and add directly to bag
+        // Auto pickup enabled: prevent pickup and add directly to bag
         int coinCount = itemStack.getCount();
 
         // Add coins to bag
         int currentCoins = bagStack.getOrDefault(ModDataComponents.RELIC_COIN_COUNT.get(), 0);
         bagStack.set(ModDataComponents.RELIC_COIN_COUNT.get(), currentCoins + coinCount);
 
+        // Play pickup sound and animation
+        player.take(itemEntity, coinCount);
+
+        // Play pickup sound explicitly for better feedback
+        player.playSound(net.minecraft.sounds.SoundEvents.ITEM_PICKUP, 0.2F,
+            ((player.getRandom().nextFloat() - player.getRandom().nextFloat()) * 0.7F + 1.0F) * 2.0F);
+
         // Remove the item entity from the world (this prevents the default pickup)
         itemEntity.discard();
-
-        // Play pickup sound for feedback
-        player.take(itemEntity, coinCount);
     }
 }
