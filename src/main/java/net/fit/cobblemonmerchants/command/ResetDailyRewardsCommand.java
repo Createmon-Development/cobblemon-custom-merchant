@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager;
+import net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -14,8 +15,8 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.Collection;
 
 /**
- * Command to reset daily reward claims: /resetdailyrewards [players] [merchant]
- * Without arguments: resets all daily rewards for the command sender
+ * Command to reset daily reward claims and trade limits: /resetdailyrewards [players] [merchant]
+ * Without arguments: resets all daily rewards and trade limits for the command sender
  * With player selector: resets for specific players
  * With merchant argument: only resets claims for that specific merchant
  */
@@ -39,7 +40,7 @@ public class ResetDailyRewardsCommand {
     }
 
     /**
-     * Resets all daily rewards for the command sender
+     * Resets all daily rewards and trade limits for the command sender
      */
     private static int resetSelf(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
@@ -47,10 +48,16 @@ public class ResetDailyRewardsCommand {
 
         try {
             ServerPlayer player = source.getPlayerOrException();
-            DailyRewardManager manager = DailyRewardManager.get(level);
-            manager.resetClaims(player.getUUID(), null);
 
-            source.sendSuccess(() -> Component.literal("§aReset all your daily reward claims! You can now claim again."), true);
+            // Reset daily rewards
+            DailyRewardManager rewardManager = DailyRewardManager.get(level);
+            rewardManager.resetClaims(player.getUUID(), null);
+
+            // Reset daily trade limits
+            DailyTradeResetManager tradeManager = DailyTradeResetManager.get(level);
+            tradeManager.resetPlayerUsage(player.getUUID());
+
+            source.sendSuccess(() -> Component.literal("§aReset all your daily reward claims and trade limits! You can now claim and trade again."), true);
             return 1;
         } catch (Exception e) {
             source.sendFailure(Component.literal("§cThis command must be run by a player!"));
@@ -59,7 +66,7 @@ public class ResetDailyRewardsCommand {
     }
 
     /**
-     * Resets all daily rewards for specific players
+     * Resets all daily rewards and trade limits for specific players
      */
     private static int resetPlayers(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
@@ -73,14 +80,16 @@ public class ResetDailyRewardsCommand {
                 return 0;
             }
 
-            DailyRewardManager manager = DailyRewardManager.get(level);
+            DailyRewardManager rewardManager = DailyRewardManager.get(level);
+            DailyTradeResetManager tradeManager = DailyTradeResetManager.get(level);
             for (ServerPlayer player : players) {
-                manager.resetClaims(player.getUUID(), null);
+                rewardManager.resetClaims(player.getUUID(), null);
+                tradeManager.resetPlayerUsage(player.getUUID());
             }
 
             int playerCount = players.size();
             source.sendSuccess(() -> Component.literal(
-                String.format("§aReset all daily reward claims for %d player%s!",
+                String.format("§aReset all daily reward claims and trade limits for %d player%s!",
                     playerCount, playerCount == 1 ? "" : "s")
             ), true);
 
@@ -92,7 +101,7 @@ public class ResetDailyRewardsCommand {
     }
 
     /**
-     * Resets daily rewards for specific players from a specific merchant
+     * Resets daily rewards and trade limits for specific players from a specific merchant
      */
     private static int resetPlayersForMerchant(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
@@ -107,14 +116,16 @@ public class ResetDailyRewardsCommand {
                 return 0;
             }
 
-            DailyRewardManager manager = DailyRewardManager.get(level);
+            DailyRewardManager rewardManager = DailyRewardManager.get(level);
+            DailyTradeResetManager tradeManager = DailyTradeResetManager.get(level);
             for (ServerPlayer player : players) {
-                manager.resetClaims(player.getUUID(), merchantId);
+                rewardManager.resetClaims(player.getUUID(), merchantId);
+                tradeManager.resetPlayerUsage(player.getUUID());
             }
 
             int playerCount = players.size();
             source.sendSuccess(() -> Component.literal(
-                String.format("§aReset daily reward claims from '%s' for %d player%s!",
+                String.format("§aReset daily reward claims and trade limits from '%s' for %d player%s!",
                     merchantId, playerCount, playerCount == 1 ? "" : "s")
             ), true);
 

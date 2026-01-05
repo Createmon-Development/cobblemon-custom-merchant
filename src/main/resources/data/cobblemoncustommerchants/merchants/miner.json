@@ -1,0 +1,138 @@
+{
+  "display_name": "Unhumble Miner Merchant",
+  "villager_biome": "minecraft:taiga",
+  "villager_profession": "minecraft:weaponsmith",
+  "trades": [
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 1
+      },
+      "output": {
+        "id": "minecraft:gunpowder",
+        "count": 5
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 4
+      },
+      "output": {
+        "id": "minecraft:stone",
+        "count": 64
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 4
+      },
+      "output": {
+        "id": "create:asurine",
+        "count": 64
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 4
+      },
+      "output": {
+        "id": "create:limestone",
+        "count": 64
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 4
+      },
+      "output": {
+        "id": "create:ochrum",
+        "count": 64
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 4
+      },
+      "output": {
+        "id": "create:scoria",
+        "count": 64
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 4
+      },
+      "output": {
+        "id": "create:scorchia",
+        "count": 64
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 4
+      },
+      "output": {
+        "id": "create:veridium",
+        "count": 64
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 5
+      },
+      "output": {
+        "id": "tfmg:raw_lead",
+        "count": 16
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 5
+      },
+      "output": {
+        "id": "tfmg:raw_nickel",
+        "count": 16
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 5
+      },
+      "output": {
+        "id": "tfmg:raw_lithium",
+        "count": 16
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 5
+      },
+      "output": {
+        "id": "galosphere:raw_palladium",
+        "count": 8
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 1
+      },
+      "output": {
+        "id": "extradelight:sugar_cookie_pickaxe",
+        "count": 16
+      },
+      "variants": ["housed"]
+    }
+  ]
+}

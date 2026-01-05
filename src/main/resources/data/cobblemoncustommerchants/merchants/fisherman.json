@@ -5,12 +5,52 @@
   "trades": [
     {
       "input": {
+        "tag": "minecraft:fishes",
+        "count": 1,
+        "display_name": "Fish"
+      },
+      "output": {
+        "id": "cobblemon:relic_coin",
+        "count": 1
+      },
+      "max_uses": 10,
+      "daily_reset": true,
+      "variant_overrides": {
+        "housed": {
+          "output_count": 2
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 16
+      },
+      "output": {
+        "id": "hybrid-aquatic:barbed_hook",
+        "count": 1
+      },
+      "position": 9
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 16
+      },
+      "output": {
+        "id": "hybrid-aquatic:glowing_hook",
+        "count": 1
+      },
+      "position": 10
+    },
+    {
+      "input": {
         "id": "minecraft:nautilus_shell",
         "count": 1
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 3
+        "count": 5
       }
     },
     {
@@ -20,7 +60,12 @@
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 25
+        "count": 32
+      },
+      "variant_overrides": {
+        "housed": {
+          "output_count": 50
+        }
       }
     },
     {
@@ -31,7 +76,34 @@
       "output": {
         "id": "cobblemon:relic_coin",
         "count": 70
+      },
+      "variant_overrides": {
+        "housed": {
+          "output_count": 128
+        }
       }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 1
+      },
+      "output": {
+        "id": "minecraft:enchanted_golden_apple",
+        "count": 100
+      },
+      "variants": ["housed"]
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_red",
+        "count": 1
+      },
+      "output": {
+        "id": "skyscobblemonitems:polished_gold_pokeball",
+        "count": 1
+      },
+      "variants": ["housed"]
     }
   ]
 }

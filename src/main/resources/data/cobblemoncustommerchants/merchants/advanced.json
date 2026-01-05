@@ -6,57 +6,78 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 3
+        "count": 48
       },
       "output": {
-        "id": "cobblemon:great_ball",
+        "id": "cobblemonpokeboxes:backpack_upgrader",
         "count": 1
-      },
-      "max_uses": 2147483647
+      }
     },
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 5
+        "count": 300
       },
       "output": {
-        "id": "cobblemon:ultra_ball",
+        "id": "cobblenav:pokefinder_item_red",
         "count": 1
       },
-      "max_uses": 2147483647
+      "variants": ["housed"]
     },
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 3
+        "count": 64
       },
       "output": {
-        "id": "cobblemon:super_potion",
+        "id": "minecraft:totem_of_undying",
         "count": 1
-      },
-      "max_uses": 2147483647
+      }
     },
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 5
+        "count": 150
       },
       "output": {
-        "id": "cobblemon:hyper_potion",
+        "id": "mega_showdown:mega_bracelet",
         "count": 1
-      },
-      "max_uses": 2147483647
+      }
     },
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 10
+        "count": 16
       },
       "output": {
-        "id": "cobblemon:max_potion",
+        "id": "simpletms:machine_tm",
+        "count": 1
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 67
+      },
+      "output": {
+        "id": "cobblemonsizevariation:growth_essence",
         "count": 1
       },
-      "max_uses": 2147483647
+      "variant_overrides": {
+        "housed": {
+          "input_count": 65
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 64
+      },
+      "output": {
+        "id": "cobblemonsizevariation:shrink_essence",
+        "count": 1
+      }
     }
   ]
 }

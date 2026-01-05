@@ -258,6 +258,7 @@ public class CustomMerchantEntity extends Villager {
                     buf.writeJsonWithCodec(net.fit.cobblemonmerchants.merchant.config.ItemRequirement.CODEC, entry.secondInput().get());
                 }
                 net.minecraft.world.item.ItemStack.STREAM_CODEC.encode(buf, entry.output());
+                buf.writeInt(entry.outputCount()); // Uncapped output count for counts > 64
                 buf.writeInt(entry.maxUses());
                 buf.writeInt(entry.villagerXp());
                 buf.writeFloat(entry.priceMultiplier());

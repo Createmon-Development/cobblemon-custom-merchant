@@ -30,7 +30,10 @@ public record SyncMerchantOffersPacket(int containerId, MerchantOffers offers) i
             buf.writeInt(packet.containerId);
             buf.writeInt(packet.offers.size());
 
+            int offerIdx = 0;
             for (MerchantOffer offer : packet.offers) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.debug(
+                    "SYNC ENCODE: offer {} uses={}/{}", offerIdx++, offer.getUses(), offer.getMaxUses());
                 // Write ItemCost A
                 ItemStack.STREAM_CODEC.encode(buf, offer.getItemCostA().itemStack());
 
@@ -83,6 +86,8 @@ public record SyncMerchantOffersPacket(int containerId, MerchantOffers offers) i
 
                 // Create the merchant offer
                 MerchantOffer offer = new MerchantOffer(costA, costB, result, uses, maxUses, xp, priceMultiplier, demand);
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.debug(
+                    "SYNC DECODE: offer {} uses={}/{}", offers.size(), uses, maxUses);
                 offers.add(offer);
             }
 

@@ -27,6 +27,7 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     private final int merchantId;
     private int lastOfferCount = -1; // Start at -1 to trigger initial sync
     private boolean needsSync = false; // Flag to force sync after trade
+    private final Player menuPlayer; // The player who has this menu open (server-side only)
 
     // Daily reward display info (client-side)
     private boolean hasDailyRewardDisplay = false;
@@ -42,6 +43,7 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     // Constructor for client side
     public MerchantTradeMenu(int containerId, Inventory playerInventory, FriendlyByteBuf extraData) {
         super(ModMenuTypes.MERCHANT_TRADE_MENU.get(), containerId);
+        this.menuPlayer = null; // Client-side doesn't need player reference
         this.merchantId = extraData.readInt();
 
         // Read synced trade entries from packet
@@ -54,6 +56,7 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             java.util.Optional<net.fit.cobblemonmerchants.merchant.config.ItemRequirement> secondInput =
                 extraData.readBoolean() ? java.util.Optional.of(extraData.readJsonWithCodec(net.fit.cobblemonmerchants.merchant.config.ItemRequirement.CODEC)) : java.util.Optional.empty();
             ItemStack output = ItemStack.STREAM_CODEC.decode(registryBuf);
+            int outputCount = extraData.readInt(); // Uncapped output count for counts > 64
             int maxUses = extraData.readInt();
             int villagerXp = extraData.readInt();
             float priceMultiplier = extraData.readFloat();
@@ -61,8 +64,10 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             java.util.Optional<Integer> position = extraData.readBoolean() ? java.util.Optional.of(extraData.readInt()) : java.util.Optional.empty();
 
             this.tradeEntries.add(new net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry(
-                input, secondInput, output, maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
-                java.util.Optional.empty() // variantOverrides not needed client-side
+                input, secondInput, output, outputCount, maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
+                java.util.Optional.empty(), // variantOverrides not needed client-side
+                false, // dailyReset not needed client-side
+                java.util.Optional.empty() // variants not needed client-side
             ));
         }
 
@@ -86,8 +91,10 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         // Try to get the merchant from the world
         if (playerInventory.player.level().getEntity(merchantId) instanceof CustomMerchantEntity entity) {
             this.merchant = entity;
-            this.offers = entity.getOffers();
-            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Found merchant, offers size: {}", this.offers.size());
+            // Don't read offers from entity - wait for SyncMerchantOffersPacket from server
+            // The entity on client side may not have offers synced
+            this.offers = new MerchantOffers();
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Found merchant, waiting for offers sync");
         } else {
             this.merchant = null;
             this.offers = new MerchantOffers();
@@ -100,10 +107,56 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     // Constructor for server side
     public MerchantTradeMenu(int containerId, Inventory playerInventory, CustomMerchantEntity merchant) {
         super(ModMenuTypes.MERCHANT_TRADE_MENU.get(), containerId);
+        this.menuPlayer = playerInventory.player; // Store player reference for syncing
         this.merchant = merchant;
         this.merchantId = merchant != null ? merchant.getId() : -1;
-        this.offers = merchant != null ? merchant.getOffers() : new MerchantOffers();
         this.tradeEntries = merchant != null ? merchant.getTradeEntries() : new java.util.ArrayList<>();
+
+        // Copy offers and initialize daily reset trade usage based on player's usage
+        MerchantOffers originalOffers = merchant != null ? merchant.getOffers() : new MerchantOffers();
+        this.offers = new MerchantOffers();
+
+        Player player = playerInventory.player;
+        String merchantIdStr = merchant != null && merchant.getTraderId() != null
+            ? merchant.getTraderId().toString() : "unknown";
+
+        for (int i = 0; i < originalOffers.size(); i++) {
+            MerchantOffer original = originalOffers.get(i);
+
+            // Create a copy of the offer
+            MerchantOffer copy = new MerchantOffer(
+                original.getItemCostA(),
+                original.getItemCostB(),
+                original.getResult().copy(),
+                original.getUses(),
+                original.getMaxUses(),
+                original.getXp(),
+                original.getPriceMultiplier(),
+                original.getDemand()
+            );
+
+            // For daily reset trades, initialize uses from DailyTradeResetManager
+            if (i < tradeEntries.size() && tradeEntries.get(i).dailyReset()) {
+                if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer &&
+                    serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                    net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
+                        net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
+                    int usesToday = resetManager.getUsesToday(player.getUUID(), merchantIdStr, i);
+
+                    // Set the uses on the copy to reflect player's daily usage
+                    for (int u = 0; u < usesToday; u++) {
+                        copy.increaseUses();
+                    }
+
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "SERVER: Initialized daily reset trade {} with uses={}/{} for player {}",
+                        i, copy.getUses(), copy.getMaxUses(), player.getName().getString());
+                }
+            }
+
+            this.offers.add(copy);
+        }
+
         // Keep lastOfferCount at -1 to trigger sync in broadcastChanges
         net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("SERVER: Creating menu for merchant ID: {}, offers size: {}",
             merchantId, this.offers.size());
@@ -212,6 +265,16 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             return false;
         }
 
+        // Check if this is a broken trade (barrier block in input or output) - prevent trading
+        if (offer.getResult().getItem() == net.minecraft.world.item.Items.BARRIER ||
+            offer.getItemCostA().itemStack().getItem() == net.minecraft.world.item.Items.BARRIER ||
+            (!offer.getCostB().isEmpty() && offer.getCostB().getItem() == net.minecraft.world.item.Items.BARRIER)) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                "Player {} attempted to complete a broken trade (barrier item) at index {}",
+                player.getName().getString(), tradeIndex);
+            return false;
+        }
+
         // Get the original trade entry for tag-based validation
         net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry tradeEntry =
             tradeIndex < tradeEntries.size() ? tradeEntries.get(tradeIndex) : null;
@@ -219,6 +282,32 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         if (tradeEntry == null) {
             // Fallback to vanilla validation for trades without TradeEntry (e.g., Black Market)
             return executeTradeLegacy(tradeIndex, player, offer);
+        }
+
+        // Check daily reset limits if enabled
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "SERVER: Trade {} dailyReset={}, maxUses={}",
+            tradeIndex, tradeEntry.dailyReset(), tradeEntry.maxUses());
+        if (tradeEntry.dailyReset() && player instanceof ServerPlayer serverPlayer) {
+            if (serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
+                String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
+                int maxUses = tradeEntry.maxUses();
+                int usesToday = resetManager.getUsesToday(player.getUUID(), merchantId, tradeIndex);
+
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "SERVER: Daily trade check - player={}, merchant={}, trade={}, usesToday={}, maxUses={}, canUse={}",
+                    player.getName().getString(), merchantId, tradeIndex, usesToday, maxUses, usesToday < maxUses);
+
+                if (!resetManager.canUseTrade(player.getUUID(), merchantId, tradeIndex, maxUses)) {
+                    // Player has used up their daily limit for this trade
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "SERVER: Player {} has reached daily limit for trade {} from merchant {}",
+                        player.getName().getString(), tradeIndex, merchantId);
+                    return false;
+                }
+            }
         }
 
         // Count how many of each required item the player has
@@ -283,8 +372,21 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             player.drop(result, false);
         }
 
-        // Update the offer usage
+        // Update the offer usage counter for GUI display
         offer.increaseUses();
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "SERVER: Trade {} uses incremented to {}/{} (dailyReset={})",
+            tradeIndex, offer.getUses(), offer.getMaxUses(), tradeEntry.dailyReset());
+
+        // Record daily trade use if enabled (for daily limit checking)
+        if (tradeEntry.dailyReset() && player instanceof ServerPlayer serverPlayer) {
+            if (serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
+                String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
+                resetManager.recordTradeUse(player.getUUID(), merchantId, tradeIndex);
+            }
+        }
 
         // Mark for sync on next broadcastChanges
         needsSync = true;
@@ -417,35 +519,27 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         super.broadcastChanges();
 
         // Sync offers to client when they change, after trades, or on first broadcast
-        if (merchant != null) {
-            MerchantOffers currentOffers = merchant.getOffers();
-            boolean shouldSync = needsSync || currentOffers.size() != lastOfferCount;
+        // Use this.offers (the menu's copy with player-specific usage) not merchant.getOffers()
+        boolean shouldSync = needsSync || this.offers.size() != lastOfferCount;
 
-            if (shouldSync) {
-                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("SERVER: Syncing offers - count: {}, needsSync: {}",
-                    currentOffers.size(), needsSync);
-                sendOffersToPlayers();
-                lastOfferCount = currentOffers.size();
-                needsSync = false;
-            }
+        if (shouldSync) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("SERVER: Syncing offers - count: {}, needsSync: {}",
+                this.offers.size(), needsSync);
+            sendOffersToPlayer();
+            lastOfferCount = this.offers.size();
+            needsSync = false;
         }
     }
 
-    private void sendOffersToPlayers() {
-        if (merchant != null) {
-            MerchantOffers currentOffers = merchant.getOffers();
-            // Send to all players within range - the packet handler will check containerId
-            if (merchant.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-                for (ServerPlayer player : serverLevel.players()) {
-                    // Send to players close enough to be trading with this merchant
-                    if (player.distanceTo(merchant) < 8.0) {
-                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("SERVER: Syncing {} offers to player {} (containerId: {})",
-                            currentOffers.size(), player.getName().getString(), this.containerId);
-                        PacketDistributor.sendToPlayer(player,
-                            new SyncMerchantOffersPacket(this.containerId, currentOffers));
-                    }
-                }
-            }
+    private void sendOffersToPlayer() {
+        // Send the menu's offers (with player-specific usage counts) to the player who has this menu open
+        // Use stored menuPlayer reference instead of searching - this ensures we can sync even
+        // during initial menu creation before containerMenu is set
+        if (menuPlayer instanceof ServerPlayer serverPlayer) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("SERVER: Syncing {} offers to player {} (containerId: {})",
+                this.offers.size(), serverPlayer.getName().getString(), this.containerId);
+            PacketDistributor.sendToPlayer(serverPlayer,
+                new SyncMerchantOffersPacket(this.containerId, this.offers));
         }
     }
 

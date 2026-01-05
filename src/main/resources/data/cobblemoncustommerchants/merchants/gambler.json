@@ -6,7 +6,7 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 10
+        "count": 12
       },
       "output": {
         "id": "cobblemonpokeboxes:pokeball_pokebox",
@@ -21,12 +21,14 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 25
+        "count": 30
       },
       "output": {
         "id": "cobblemonpokeboxes:greatball_pokebox",
         "count": 1
       },
+      "max_uses": 5,
+      "daily_reset": true,
       "variant_overrides": {
         "housed": {
           "input_count": 25
@@ -35,13 +37,102 @@
     },
     {
       "input": {
-        "id": "cobblemon:relic_coin",
+        "id": "skyscobblemonitems:event_ticket_purple",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemonpokeboxes:pokerock_pokebox",
+        "count": 3
+      },
+      "position": 9
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_purple",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemonpokeboxes:battle_item_pokebox",
+        "count": 1
+      },
+      "position": 10
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_purple",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemonpokeboxes:diveball_pokebox",
+        "count": 1
+      },
+      "position": 11
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_purple",
+        "count": 10
+      },
+      "output": {
+        "id": "cobblemon:exp_share",
+        "count": 1
+      },
+      "position": 12
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_purple",
+        "count": 4
+      },
+      "output": {
+        "id": "cobblemon:ability_capsule",
+        "count": 1
+      },
+      "position": 13
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_purple",
         "count": 5
       },
       "output": {
-        "id": "simplehats:hatbag_festive",
+        "id": "mega_showdown:mega_stone",
         "count": 1
-      }
+      },
+      "position": 14
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_purple",
+        "count": 5
+      },
+      "output": {
+        "id": "cobblemon:ability_patch",
+        "count": 1
+      },
+      "position": 15
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_purple",
+        "count": 10
+      },
+      "output": {
+        "id": "cobblemon_utility:goldencap",
+        "count": 1
+      },
+      "position": 16
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_purple",
+        "count": 2
+      },
+      "output": {
+        "id": "cobblemon_utility:woodencap",
+        "count": 1
+      },
+      "position": 17
     }
   ],
   "daily_reward": {

@@ -10,7 +10,12 @@
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 15
+        "count": 32
+      },
+      "variant_overrides": {
+        "housed": {
+          "output_count": 50
+        }
       }
     },
     {
@@ -22,6 +27,11 @@
       "output": {
         "id": "cobblemon:relic_coin",
         "count": 3
+      },
+      "variant_overrides": {
+        "housed": {
+          "output_count": 5
+        }
       }
     },
     {
@@ -33,7 +43,12 @@
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 15
+        "count": 3
+      },
+      "variant_overrides": {
+        "housed": {
+          "output_count": 5
+        }
       }
     },
     {
@@ -44,7 +59,12 @@
       },
       "output": {
         "id": "cobblemon:relic_coin",
-        "count": 10
+        "count": 7
+      },
+      "variant_overrides": {
+        "housed": {
+          "output_count": 10
+        }
       }
     },
     {
@@ -56,6 +76,26 @@
       "output": {
         "id": "cobblemon:relic_coin",
         "count": 80
+      },
+      "variant_overrides": {
+        "housed": {
+          "output_count": 128
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "minecraft:nether_star",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemon:relic_coin",
+        "count": 32
+      },
+      "variant_overrides": {
+        "housed": {
+          "output_count": 45
+        }
       }
     }
   ]
