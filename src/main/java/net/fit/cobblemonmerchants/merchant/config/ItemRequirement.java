@@ -168,6 +168,13 @@ public class ItemRequirement {
         return count;
     }
 
+    /**
+     * Gets the count (alias for getCount for record-like access).
+     */
+    public int count() {
+        return count;
+    }
+
     public boolean isTag() {
         return tag != null;
     }
@@ -205,8 +212,20 @@ public class ItemRequirement {
      * Returns null if the tag is empty (broken trade).
      */
     public ItemCost toItemCost() {
+        return toItemCostWithCount(count);
+    }
+
+    /**
+     * Convert to ItemCost with a custom count for variant overrides.
+     * Note: Tags are not fully supported in vanilla ItemCost,
+     * so we use the first item from the tag.
+     *
+     * @param customCount The count to use instead of the default count
+     * @return ItemCost with the specified count
+     */
+    public ItemCost toItemCostWithCount(int customCount) {
         if (exactItem != null) {
-            return new ItemCost(exactItem.getItem(), count);
+            return new ItemCost(exactItem.getItem(), customCount);
         } else {
             // Use first item from tag
             Item firstItem = BuiltInRegistries.ITEM.stream()
@@ -215,9 +234,9 @@ public class ItemRequirement {
                 .orElse(null);
             if (firstItem == null) {
                 // Tag is empty - return barrier item as fallback
-                return new ItemCost(net.minecraft.world.item.Items.BARRIER, count);
+                return new ItemCost(net.minecraft.world.item.Items.BARRIER, customCount);
             }
-            return new ItemCost(firstItem, count);
+            return new ItemCost(firstItem, customCount);
         }
     }
 }

@@ -28,6 +28,17 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     private int lastOfferCount = -1; // Start at -1 to trigger initial sync
     private boolean needsSync = false; // Flag to force sync after trade
 
+    // Daily reward display info (client-side)
+    private boolean hasDailyRewardDisplay = false;
+    private ItemStack dailyRewardItem = ItemStack.EMPTY;
+    private int dailyRewardPosition = -1;
+    private boolean dailyRewardClaimed = false;
+    private String timeUntilReset = "";
+    private int dailyRewardMinCount = 1;
+    private int dailyRewardMaxCount = 1;
+    private boolean dailyRewardSharedCooldown = true;
+    private java.util.UUID merchantEntityUUID = null;
+
     // Constructor for client side
     public MerchantTradeMenu(int containerId, Inventory playerInventory, FriendlyByteBuf extraData) {
         super(ModMenuTypes.MERCHANT_TRADE_MENU.get(), containerId);
@@ -50,11 +61,27 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             java.util.Optional<Integer> position = extraData.readBoolean() ? java.util.Optional.of(extraData.readInt()) : java.util.Optional.empty();
 
             this.tradeEntries.add(new net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry(
-                input, secondInput, output, maxUses, villagerXp, priceMultiplier, tradeDisplayName, position
+                input, secondInput, output, maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
+                java.util.Optional.empty() // variantOverrides not needed client-side
             ));
         }
 
         net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Received {} trade entries from server", this.tradeEntries.size());
+
+        // Read daily reward display info
+        this.hasDailyRewardDisplay = extraData.readBoolean();
+        if (this.hasDailyRewardDisplay) {
+            this.dailyRewardItem = ItemStack.STREAM_CODEC.decode(registryBuf);
+            this.dailyRewardPosition = extraData.readInt();
+            this.dailyRewardClaimed = extraData.readBoolean();
+            this.timeUntilReset = extraData.readUtf();
+            this.dailyRewardMinCount = extraData.readInt();
+            this.dailyRewardMaxCount = extraData.readInt();
+            this.dailyRewardSharedCooldown = extraData.readBoolean();
+            this.merchantEntityUUID = extraData.readUUID();
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Daily reward at position {}, claimed: {}, reset in: {}, count: {}-{}, sharedCooldown: {}",
+                this.dailyRewardPosition, this.dailyRewardClaimed, this.timeUntilReset, this.dailyRewardMinCount, this.dailyRewardMaxCount, this.dailyRewardSharedCooldown);
+        }
 
         // Try to get the merchant from the world
         if (playerInventory.player.level().getEntity(merchantId) instanceof CustomMerchantEntity entity) {
@@ -118,6 +145,57 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
 
     public java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> getTradeEntries() {
         return tradeEntries;
+    }
+
+    // Daily reward display getters
+    public boolean hasDailyRewardDisplay() {
+        return hasDailyRewardDisplay;
+    }
+
+    public ItemStack getDailyRewardItem() {
+        return dailyRewardItem;
+    }
+
+    public int getDailyRewardPosition() {
+        return dailyRewardPosition;
+    }
+
+    public boolean isDailyRewardClaimed() {
+        return dailyRewardClaimed;
+    }
+
+    public String getTimeUntilReset() {
+        return timeUntilReset;
+    }
+
+    public int getDailyRewardMinCount() {
+        return dailyRewardMinCount;
+    }
+
+    public int getDailyRewardMaxCount() {
+        return dailyRewardMaxCount;
+    }
+
+    public boolean isDailyRewardSharedCooldown() {
+        return dailyRewardSharedCooldown;
+    }
+
+    public java.util.UUID getMerchantEntityUUID() {
+        return merchantEntityUUID;
+    }
+
+    /**
+     * Sets the daily reward as claimed (called after successful claim)
+     */
+    public void setDailyRewardClaimed(boolean claimed) {
+        this.dailyRewardClaimed = claimed;
+    }
+
+    /**
+     * Updates the time until reset string (for live updates)
+     */
+    public void updateTimeUntilReset(String time) {
+        this.timeUntilReset = time;
     }
 
     /**

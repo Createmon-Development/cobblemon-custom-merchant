@@ -1,8 +1,3 @@
-
-# NixOS development environment
-flake.nix
-flake.lock
-
 # Gradle
 .gradle/
 build/

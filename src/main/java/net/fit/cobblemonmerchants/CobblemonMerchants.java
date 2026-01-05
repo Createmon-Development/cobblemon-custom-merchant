@@ -104,7 +104,8 @@ public class CobblemonMerchants {
     public void onRegisterCommands(RegisterCommandsEvent event) {
         net.fit.cobblemonmerchants.command.SpawnMerchantCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.RefreshBlackMarketCommand.register(event.getDispatcher());
-        LOGGER.info("Registered /spawnmerchant and /refreshblackmarket commands");
+        net.fit.cobblemonmerchants.command.ResetDailyRewardsCommand.register(event.getDispatcher());
+        LOGGER.info("Registered /spawnmerchant, /refreshblackmarket, and /resetdailyrewards commands");
     }
 
     private void registerEntityAttributes(EntityAttributeCreationEvent event) {
