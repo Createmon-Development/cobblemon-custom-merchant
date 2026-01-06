@@ -278,9 +278,31 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
 
         // Give the player the result item
         ItemStack result = offer.getResult().copy();
-        if (!player.getInventory().add(result)) {
-            // If inventory is full, drop the item
-            player.drop(result, false);
+
+        // Check if result is relic coins and auto-pickup is enabled
+        if (isRelicCoin(result)) {
+            // Find coin bag with auto-pickup enabled
+            ItemStack coinBag = findCoinBagWithAutoPickup(player);
+            if (coinBag != null) {
+                // Add coins directly to bag
+                int currentCoins = coinBag.getOrDefault(net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+                coinBag.set(net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), currentCoins + result.getCount());
+
+                // Play pickup sound
+                player.playSound(net.minecraft.sounds.SoundEvents.ITEM_PICKUP, 0.5F, 1.0F);
+            } else {
+                // No bag or auto-pickup disabled, add to inventory normally
+                if (!player.getInventory().add(result)) {
+                    // If inventory is full, drop the item
+                    player.drop(result, false);
+                }
+            }
+        } else {
+            // Not relic coins, add to inventory normally
+            if (!player.getInventory().add(result)) {
+                // If inventory is full, drop the item
+                player.drop(result, false);
+            }
         }
 
         // Update the offer usage
@@ -346,8 +368,29 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         }
 
         ItemStack result = offer.getResult().copy();
-        if (!player.getInventory().add(result)) {
-            player.drop(result, false);
+
+        // Check if result is relic coins and auto-pickup is enabled
+        if (isRelicCoin(result)) {
+            // Find coin bag with auto-pickup enabled
+            ItemStack coinBag = findCoinBagWithAutoPickup(player);
+            if (coinBag != null) {
+                // Add coins directly to bag
+                int currentCoins = coinBag.getOrDefault(net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+                coinBag.set(net.fit.cobblemonmerchants.item.component.ModDataComponents.RELIC_COIN_COUNT.get(), currentCoins + result.getCount());
+
+                // Play pickup sound
+                player.playSound(net.minecraft.sounds.SoundEvents.ITEM_PICKUP, 0.5F, 1.0F);
+            } else {
+                // No bag or auto-pickup disabled, add to inventory normally
+                if (!player.getInventory().add(result)) {
+                    player.drop(result, false);
+                }
+            }
+        } else {
+            // Not relic coins, add to inventory normally
+            if (!player.getInventory().add(result)) {
+                player.drop(result, false);
+            }
         }
 
         offer.increaseUses();
@@ -527,5 +570,25 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         }
         ResourceLocation itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(displayStack.getItem());
         return itemId.equals(relicCoinId);
+    }
+
+    /**
+     * Finds the player's coin bag if they have one and auto-pickup is enabled
+     * @return The coin bag ItemStack, or null if not found or auto-pickup disabled
+     */
+    private ItemStack findCoinBagWithAutoPickup(Player player) {
+        for (ItemStack stack : player.getInventory().items) {
+            if (stack.getItem() instanceof net.fit.cobblemonmerchants.item.custom.RelicCoinBagItem) {
+                // Check if auto-pickup is enabled (default is true)
+                boolean autoPickupEnabled = stack.getOrDefault(net.fit.cobblemonmerchants.item.component.ModDataComponents.AUTO_PICKUP_ENABLED.get(), true);
+                if (autoPickupEnabled) {
+                    return stack;
+                }
+                // Found a bag but auto-pickup is disabled
+                return null;
+            }
+        }
+        // No coin bag found
+        return null;
     }
 }

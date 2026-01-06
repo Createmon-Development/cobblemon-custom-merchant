@@ -387,6 +387,12 @@ public class CustomMerchantEntity extends Villager {
 
         // Force the entity to stay in place horizontally, but allow gravity
         this.setDeltaMovement(this.getDeltaMovement().multiply(0, 1, 0));
+
+        // Lock rotation - prevent the entity from rotating its body back to south
+        this.setYBodyRot(this.getYRot());
+        this.yBodyRotO = this.getYRot();
+        this.setYHeadRot(this.getYRot());
+        this.yHeadRotO = this.getYRot();
     }
 
     @Override

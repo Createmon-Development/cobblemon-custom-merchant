@@ -6,6 +6,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -19,25 +21,42 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
     private final Player player;
     private final ItemStack bagStack;
     private final int bagSlot;
+    private final ContainerData data;
 
     // Constructor for client side
     public RelicCoinBagMenu(int containerId, Inventory playerInventory, FriendlyByteBuf extraData) {
-        this(containerId, playerInventory, playerInventory.getSelected());
+        this(containerId, playerInventory, playerInventory.getSelected(), new SimpleContainerData(1));
     }
 
     // Constructor for server side
     public RelicCoinBagMenu(int containerId, Inventory playerInventory, ItemStack bagStack) {
+        this(containerId, playerInventory, bagStack, new SimpleContainerData(1));
+    }
+
+    // Constructor with ContainerData for synchronization
+    private RelicCoinBagMenu(int containerId, Inventory playerInventory, ItemStack bagStack, ContainerData data) {
         super(ModMenuTypes.RELIC_COIN_BAG_MENU.get(), containerId);
         this.player = playerInventory.player;
         this.bagStack = bagStack;
         this.bagSlot = playerInventory.selected;
+        this.data = data;
 
-        // Add coin withdraw slot in the center (slot 13 = row 1, col 4)
+        // Sync coin count from bag to container data
+        this.data.set(0, getCoinCount());
+
+        // Add coin withdraw slot in the center (slot 0, row 1, col 4)
         // X = 8 + (4 * 18) = 80, Y = 18 + (1 * 18) = 36
         this.addSlot(new CoinWithdrawSlot(this, 80, 36));
 
+        // Add toggle button slot in top right corner (slot 1, row 0, col 8)
+        // X = 8 + (8 * 18) = 152, Y = 18 + (0 * 18) = 18
+        this.addSlot(new ToggleSlot(this, 152, 18));
+
         // Add player inventory slots
         addPlayerInventorySlots(playerInventory);
+
+        // Add container data for client-server sync
+        this.addDataSlots(this.data);
     }
 
     private void addPlayerInventorySlots(Inventory playerInventory) {
@@ -57,10 +76,16 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
     }
 
     /**
-     * Gets the current number of coins from bag NBT
+     * Gets the current number of coins from bag NBT (server) or synced data (client)
      */
     public int getCoinCount() {
-        return bagStack.getOrDefault(ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+        if (player.level().isClientSide) {
+            // On client, use synced data
+            return data.get(0);
+        } else {
+            // On server, read from bag
+            return bagStack.getOrDefault(ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+        }
     }
 
     /**
@@ -91,46 +116,51 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
         return false;
     }
 
+    /**
+     * Gets the auto-pickup toggle state
+     * @return true if auto-pickup is enabled, false otherwise
+     */
+    public boolean isAutoPickupEnabled() {
+        return bagStack.getOrDefault(ModDataComponents.AUTO_PICKUP_ENABLED.get(), true);
+    }
+
+    /**
+     * Sets the auto-pickup toggle state
+     */
+    public void setAutoPickupEnabled(boolean enabled) {
+        bagStack.set(ModDataComponents.AUTO_PICKUP_ENABLED.get(), enabled);
+    }
+
+    /**
+     * Toggles the auto-pickup state
+     */
+    public void toggleAutoPickup() {
+        setAutoPickupEnabled(!isAutoPickupEnabled());
+    }
+
+    @Override
+    public void broadcastChanges() {
+        super.broadcastChanges();
+
+        // Sync coin count from bag to client every tick
+        if (!player.level().isClientSide) {
+            int currentCount = bagStack.getOrDefault(ModDataComponents.RELIC_COIN_COUNT.get(), 0);
+            this.data.set(0, currentCount);
+            player.getInventory().setChanged();
+        }
+    }
+
     @Override
     public void clicked(int slotId, int button, @NotNull net.minecraft.world.inventory.ClickType clickType, @NotNull Player player) {
+        // Handle clicking on the toggle slot (slot 1)
+        if (slotId == 1) {
+            // Toggle auto-pickup on any click
+            toggleAutoPickup();
+            return;
+        }
+
         // Handle special clicking for the coin withdraw slot (slot 0)
         if (slotId == 0) {
-            // Don't allow interaction if bag has 0 coins
-            if (getCoinCount() <= 0) {
-                ItemStack carried = getCarried();
-                // Only allow depositing coins when bag is empty
-                ResourceLocation carriedId = carried.isEmpty() ? null :
-                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(carried.getItem());
-                boolean holdingCoins = carriedId != null && carriedId.toString().equals("cobblemon:relic_coin");
-
-                if (holdingCoins && clickType == net.minecraft.world.inventory.ClickType.PICKUP) {
-                    if (button == 1) {
-                        // Right-click: deposit 1 coin
-                        addCoins(1);
-                        carried.shrink(1);
-                        setCarried(carried);
-
-                        // Update display
-                        if (this.slots.get(0) instanceof CoinWithdrawSlot coinSlot) {
-                            coinSlot.updateDisplayStack();
-                        }
-                        return;
-                    } else if (button == 0) {
-                        // Left-click with coins: deposit full stack
-                        addCoins(carried.getCount());
-                        setCarried(ItemStack.EMPTY);
-
-                        // Update display
-                        if (this.slots.get(0) instanceof CoinWithdrawSlot coinSlot) {
-                            coinSlot.updateDisplayStack();
-                        }
-                        return;
-                    }
-                }
-                // Don't allow withdrawing from empty bag
-                return;
-            }
-
             ItemStack carried = getCarried();
 
             // Check if clicking with relic coins in cursor
@@ -138,95 +168,54 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
                 net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(carried.getItem());
             boolean holdingCoins = carriedId != null && carriedId.toString().equals("cobblemon:relic_coin");
 
-            if (clickType == net.minecraft.world.inventory.ClickType.PICKUP) {
-                if (holdingCoins) {
-                    // Right-click (button 1) or Left-click (button 0) with coins in cursor
-                    if (button == 1) {
-                        // Right-click: deposit 1 coin
-                        addCoins(1);
-                        carried.shrink(1);
-                        setCarried(carried);
+            if (holdingCoins) {
+                // Clicking with coins: deposit them (works for any click type)
+                addCoins(carried.getCount());
+                setCarried(ItemStack.EMPTY);
+            } else if (carried.isEmpty() && getCoinCount() > 0) {
+                // Empty cursor - withdraw coins
+                if (clickType == net.minecraft.world.inventory.ClickType.PICKUP) {
+                    net.minecraft.world.item.Item relicCoinItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+                        ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin"));
 
-                        // Update display
-                        if (this.slots.get(0) instanceof CoinWithdrawSlot coinSlot) {
-                            coinSlot.updateDisplayStack();
+                    if (relicCoinItem != null && relicCoinItem != net.minecraft.world.item.Items.AIR) {
+                        int toWithdraw;
+                        if (button == 0) {
+                            // Left-click: withdraw full stack (64 coins)
+                            toWithdraw = Math.min(getCoinCount(), 64);
+                        } else {
+                            // Right-click: withdraw half stack (32 coins)
+                            toWithdraw = Math.min(getCoinCount(), 32);
                         }
-                        return;
-                    } else if (button == 0) {
-                        // Left-click with coins: deposit full stack
-                        addCoins(carried.getCount());
-                        setCarried(ItemStack.EMPTY);
+                        removeCoins(toWithdraw);
+                        setCarried(new ItemStack(relicCoinItem, toWithdraw));
+                    }
+                } else if (clickType == net.minecraft.world.inventory.ClickType.QUICK_MOVE) {
+                    // Shift-click: withdraw exactly 1 stack (64 coins) to inventory
+                    int toWithdraw = Math.min(getCoinCount(), 64);
+                    net.minecraft.world.item.Item relicCoinItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+                        ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin"));
 
-                        // Update display
-                        if (this.slots.get(0) instanceof CoinWithdrawSlot coinSlot) {
-                            coinSlot.updateDisplayStack();
+                    if (relicCoinItem != null && relicCoinItem != net.minecraft.world.item.Items.AIR) {
+                        ItemStack coinStack = new ItemStack(relicCoinItem, toWithdraw);
+
+                        // Try to add exactly this stack to inventory
+                        if (!player.getInventory().add(coinStack)) {
+                            // Inventory full, don't remove coins
+                            return;
                         }
-                        return;
-                    }
-                } else if (carried.isEmpty()) {
-                    // Left-click without holding: withdraw full stack (64 coins)
-                    if (button == 0) {
-                        int toWithdraw = Math.min(getCoinCount(), 64);
-                        net.minecraft.world.item.Item relicCoinItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
-                            ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin"));
 
-                        if (relicCoinItem != null && relicCoinItem != net.minecraft.world.item.Items.AIR) {
-                            removeCoins(toWithdraw);
-                            setCarried(new ItemStack(relicCoinItem, toWithdraw));
-
-                            // Update display
-                            if (this.slots.get(0) instanceof CoinWithdrawSlot coinSlot) {
-                                coinSlot.updateDisplayStack();
-                            }
-                        }
-                        return;
-                    }
-                    // Right-click without holding: withdraw half stack (32 coins)
-                    else if (button == 1) {
-                        int toWithdraw = Math.min(getCoinCount(), 32);
-                        net.minecraft.world.item.Item relicCoinItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
-                            ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin"));
-
-                        if (relicCoinItem != null && relicCoinItem != net.minecraft.world.item.Items.AIR) {
-                            removeCoins(toWithdraw);
-                            setCarried(new ItemStack(relicCoinItem, toWithdraw));
-
-                            // Update display
-                            if (this.slots.get(0) instanceof CoinWithdrawSlot coinSlot) {
-                                coinSlot.updateDisplayStack();
-                            }
-                        }
-                        return;
-                    }
-                }
-            } else if (clickType == net.minecraft.world.inventory.ClickType.QUICK_MOVE) {
-                // Shift-click: withdraw exactly 1 stack (64 coins) to inventory - no rapid fire
-                int toWithdraw = Math.min(getCoinCount(), 64);
-                net.minecraft.world.item.Item relicCoinItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin"));
-
-                if (relicCoinItem != null && relicCoinItem != net.minecraft.world.item.Items.AIR) {
-                    ItemStack coinStack = new ItemStack(relicCoinItem, toWithdraw);
-
-                    // Try to add exactly this stack to inventory
-                    if (!player.getInventory().add(coinStack)) {
-                        // Inventory full, don't remove coins
-                        return;
-                    }
-
-                    // Only remove the coins that were successfully added
-                    int coinsAdded = toWithdraw - coinStack.getCount();
-                    if (coinsAdded > 0) {
-                        removeCoins(coinsAdded);
-
-                        // Update display
-                        if (this.slots.get(0) instanceof CoinWithdrawSlot coinSlot) {
-                            coinSlot.updateDisplayStack();
+                        // Only remove the coins that were successfully added
+                        int coinsAdded = toWithdraw - coinStack.getCount();
+                        if (coinsAdded > 0) {
+                            removeCoins(coinsAdded);
                         }
                     }
                 }
-                return;
             }
+
+            // ALWAYS return for slot 0 to prevent vanilla behavior
+            return;
         }
 
         // For all other slots, use default behavior
@@ -243,8 +232,8 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
 
         ItemStack slotStack = slot.getItem();
 
-        // Slot 0 is handled by clicked() method
-        if (index == 0) {
+        // Slots 0 and 1 are handled by clicked() method (coin slot and toggle slot)
+        if (index == 0 || index == 1) {
             return ItemStack.EMPTY;
         }
 
@@ -268,16 +257,16 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
         }
 
         // Not a relic coin - try normal shift-click behavior to move it around inventory
-        if (index >= 1 && index < this.slots.size()) {
+        if (index >= 2 && index < this.slots.size()) {
             // From player inventory to hotbar or vice versa
-            if (index < 28) {
+            if (index < 29) {
                 // From main inventory to hotbar
-                if (!this.moveItemStackTo(slotStack, 28, 37, false)) {
+                if (!this.moveItemStackTo(slotStack, 29, 38, false)) {
                     return ItemStack.EMPTY;
                 }
             } else {
                 // From hotbar to main inventory
-                if (!this.moveItemStackTo(slotStack, 1, 28, false)) {
+                if (!this.moveItemStackTo(slotStack, 2, 29, false)) {
                     return ItemStack.EMPTY;
                 }
             }

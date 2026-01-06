@@ -45,22 +45,22 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         guiGraphics.blit(TEXTURE, x, y + 3 * 18 + 17, 0, 126, this.imageWidth, 96);
 
         // Draw gray overlay covering all disabled slots and grid lines
-        // Strategy: Cover entire 3x9 grid except center slot (row 1, col 4)
-        // Slot grid starts at (x+7, y+17) and each slot is 18x18 including borders
-
-        // Draw three large sections to create a seamless flat gray texture
+        // Strategy: Cover entire 3x9 grid except:
+        // - Center slot (coin slot at row 1, col 4)
+        // - Top right slot (toggle at row 0, col 8)
 
         // Section 1: Left side (columns 0-3, all 3 rows)
         guiGraphics.fill(x + 7, y + 17, x + 7 + 4 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
 
-        // Section 2: Right side (columns 5-8, all 3 rows)
-        guiGraphics.fill(x + 7 + 5 * 18, y + 17, x + 7 + 9 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
+        // Section 2: Right side columns 5-7, all 3 rows
+        guiGraphics.fill(x + 7 + 5 * 18, y + 17, x + 7 + 8 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
 
-        // Section 3: Center column above and below the coin slot
-        // Column 4, row 0 (above coin)
-        guiGraphics.fill(x + 7 + 4 * 18, y + 17, x + 7 + 5 * 18, y + 17 + 18, 0xAA8B8B8B);
-        // Column 4, row 2 (below coin)
-        guiGraphics.fill(x + 7 + 4 * 18, y + 17 + 2 * 18, x + 7 + 5 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
+        // Section 3: Far right column (col 8) rows 1-2 (below toggle)
+        guiGraphics.fill(x + 7 + 8 * 18, y + 17 + 18, x + 7 + 9 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
+
+        // Section 4: Center column (col 4) rows 0 and 2 (above and below coin slot)
+        guiGraphics.fill(x + 7 + 4 * 18, y + 17, x + 7 + 5 * 18, y + 17 + 18, 0xAA8B8B8B); // Row 0
+        guiGraphics.fill(x + 7 + 4 * 18, y + 17 + 2 * 18, x + 7 + 5 * 18, y + 17 + 3 * 18, 0xAA8B8B8B); // Row 2
     }
 
     @Override
@@ -68,12 +68,35 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         // Render relic coin icon and count directly (like merchant GUI does)
+        // This is called every frame, so it will update in real-time
+        // NOTE: We render this AFTER super.render() so it appears on top
         renderCoinSlot(guiGraphics);
+
+        // Render toggle button (green/red glass pane)
+        renderToggleButton(guiGraphics);
 
         this.renderTooltip(guiGraphics, mouseX, mouseY);
 
         // Render coin count tooltip when hovering over the center slot
         renderCoinTooltip(guiGraphics, mouseX, mouseY);
+
+        // Render toggle tooltip when hovering over the toggle slot
+        renderToggleTooltip(guiGraphics, mouseX, mouseY);
+    }
+
+    @Override
+    protected void renderSlot(@NotNull GuiGraphics guiGraphics, @NotNull net.minecraft.world.inventory.Slot slot) {
+        // Skip rendering for coin slot (slot 0) and toggle slot (slot 1) - we handle those manually
+        if (slot.index == 0 || slot.index == 1) {
+            return;
+        }
+        super.renderSlot(guiGraphics, slot);
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        // Force the screen to refresh every tick to show real-time coin count updates
     }
 
     /**
@@ -154,5 +177,65 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         guiGraphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY, 0x404040, false);
         // Render "Inventory" label
         guiGraphics.drawString(this.font, this.playerInventoryTitle, this.inventoryLabelX, this.inventoryLabelY, 0x404040, false);
+    }
+
+    /**
+     * Renders the toggle button (green or red glass pane)
+     */
+    private void renderToggleButton(GuiGraphics guiGraphics) {
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+
+        // Toggle slot position (top right - row 0, col 8)
+        int slotX = x + 8 + 8 * 18; // x + 8 + 144 = x + 152
+        int slotY = y + 18 + 0 * 18; // y + 18
+
+        // Get the appropriate glass pane based on autoPickup mode state
+        boolean autoPickupEnabled = menu.isAutoPickupEnabled();
+        net.minecraft.world.item.Item glassPane;
+
+        if (autoPickupEnabled) {
+            // Green glass pane - auto pickup mode ON
+            glassPane = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "lime_stained_glass_pane"));
+        } else {
+            // Red glass pane - auto pickup mode OFF
+            glassPane = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "red_stained_glass_pane"));
+        }
+
+        if (glassPane != null && glassPane != net.minecraft.world.item.Items.AIR) {
+            ItemStack displayStack = new ItemStack(glassPane, 1);
+            guiGraphics.renderItem(displayStack, slotX, slotY);
+        }
+    }
+
+    /**
+     * Renders tooltip when hovering over the toggle button
+     */
+    private void renderToggleTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+
+        // Toggle slot position (top right - row 0, col 8)
+        int slotX = x + 8 + 8 * 18; // x + 8 + 144 = x + 152
+        int slotY = y + 18 + 0 * 18; // y + 18
+
+        // Check if mouse is hovering over the toggle slot (16x16 area)
+        if (mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16) {
+            boolean autoPickupEnabled = menu.isAutoPickupEnabled();
+
+            Component tooltip;
+            if (autoPickupEnabled) {
+                tooltip = Component.literal("Auto Pickup: ON")
+                    .withStyle(net.minecraft.ChatFormatting.GREEN);
+            } else {
+                tooltip = Component.literal("Auto Pickup: OFF")
+                    .withStyle(net.minecraft.ChatFormatting.RED);
+            }
+
+            // Render the tooltip
+            guiGraphics.renderTooltip(this.font, tooltip, mouseX, mouseY);
+        }
     }
 }

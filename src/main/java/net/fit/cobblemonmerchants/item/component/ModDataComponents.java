@@ -25,6 +25,17 @@ public class ModDataComponents {
                 .networkSynchronized(net.minecraft.network.codec.ByteBufCodecs.VAR_INT)
                 .build());
 
+    /**
+     * Stores whether vacuum mode is enabled for the coin bag
+     * True = coins go directly to bag (default), False = coins go to inventory
+     */
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<Boolean>> AUTO_PICKUP_ENABLED =
+        DATA_COMPONENTS.register("auto_pickup_enabled",
+            () -> DataComponentType.<Boolean>builder()
+                .persistent(Codec.BOOL)
+                .networkSynchronized(net.minecraft.network.codec.ByteBufCodecs.BOOL)
+                .build());
+
     public static void register(IEventBus eventBus) {
         DATA_COMPONENTS.register(eventBus);
     }
