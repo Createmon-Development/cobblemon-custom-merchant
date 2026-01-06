@@ -13,7 +13,7 @@
         "id": "cobblemon:relic_coin",
         "count": 1
       },
-      "max_uses": 10,
+      "max_uses": 15,
       "daily_reset": true,
       "variant_overrides": {
         "housed": {

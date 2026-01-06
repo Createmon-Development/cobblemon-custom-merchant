@@ -21,7 +21,7 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 30
+        "count": 25
       },
       "output": {
         "id": "cobblemonpokeboxes:greatball_pokebox",
@@ -31,7 +31,7 @@
       "daily_reset": true,
       "variant_overrides": {
         "housed": {
-          "input_count": 25
+          "input_count": 20
         }
       }
     },
@@ -154,7 +154,7 @@
           "count": 1
         },
         "min_count": 1,
-        "max_count": 3,
+        "max_count": 6,
         "message": "The Gambler is feeling generous in their home! Here's %d Pokebox(es)!",
         "display_position": 26
       }
