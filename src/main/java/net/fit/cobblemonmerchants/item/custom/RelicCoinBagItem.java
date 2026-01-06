@@ -97,16 +97,6 @@ public class RelicCoinBagItem extends Item {
             .withStyle(ChatFormatting.DARK_GRAY)
             .withStyle(ChatFormatting.ITALIC));
 
-        // Add blank line after flavor text
-        tooltipComponents.add(Component.literal(""));
-
-        // Add usage hints
-        tooltipComponents.add(Component.literal("Right-click to open")
-            .withStyle(ChatFormatting.GRAY));
-        tooltipComponents.add(Component.literal("Right-click with coins in cursor to deposit")
-            .withStyle(ChatFormatting.GRAY));
-        tooltipComponents.add(Component.literal("Right-click with empty cursor to withdraw")
-            .withStyle(ChatFormatting.GRAY));
     }
 
     @Override

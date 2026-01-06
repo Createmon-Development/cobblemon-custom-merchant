@@ -48,9 +48,9 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
         // X = 8 + (4 * 18) = 80, Y = 18 + (1 * 18) = 36
         this.addSlot(new CoinWithdrawSlot(this, 80, 36));
 
-        // Add toggle button slot (slot 1, row 2, col 4 - directly below coin slot)
-        // X = 8 + (4 * 18) = 80, Y = 18 + (2 * 18) = 54
-        this.addSlot(new ToggleSlot(this, 80, 54));
+        // Add toggle button slot in top right corner (slot 1, row 0, col 8)
+        // X = 8 + (8 * 18) = 152, Y = 18 + (0 * 18) = 18
+        this.addSlot(new ToggleSlot(this, 152, 18));
 
         // Add player inventory slots
         addPlayerInventorySlots(playerInventory);

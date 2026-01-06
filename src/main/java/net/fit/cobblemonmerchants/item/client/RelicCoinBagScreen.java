@@ -45,20 +45,22 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         guiGraphics.blit(TEXTURE, x, y + 3 * 18 + 17, 0, 126, this.imageWidth, 96);
 
         // Draw gray overlay covering all disabled slots and grid lines
-        // Strategy: Cover entire 3x9 grid except center column (col 4) middle 2 slots (coin and toggle)
-        // Slot grid starts at (x+7, y+17) and each slot is 18x18 including borders
-
-        // Draw three large sections to create a seamless flat gray texture
+        // Strategy: Cover entire 3x9 grid except:
+        // - Center slot (coin slot at row 1, col 4)
+        // - Top right slot (toggle at row 0, col 8)
 
         // Section 1: Left side (columns 0-3, all 3 rows)
         guiGraphics.fill(x + 7, y + 17, x + 7 + 4 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
 
-        // Section 2: Right side (columns 5-8, all 3 rows)
-        guiGraphics.fill(x + 7 + 5 * 18, y + 17, x + 7 + 9 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
+        // Section 2: Right side columns 5-7, all 3 rows
+        guiGraphics.fill(x + 7 + 5 * 18, y + 17, x + 7 + 8 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
 
-        // Section 3: Center column above coin slot (row 0)
-        // Column 4, row 0 (above coin)
-        guiGraphics.fill(x + 7 + 4 * 18, y + 17, x + 7 + 5 * 18, y + 17 + 18, 0xAA8B8B8B);
+        // Section 3: Far right column (col 8) rows 1-2 (below toggle)
+        guiGraphics.fill(x + 7 + 8 * 18, y + 17 + 18, x + 7 + 9 * 18, y + 17 + 3 * 18, 0xAA8B8B8B);
+
+        // Section 4: Center column (col 4) rows 0 and 2 (above and below coin slot)
+        guiGraphics.fill(x + 7 + 4 * 18, y + 17, x + 7 + 5 * 18, y + 17 + 18, 0xAA8B8B8B); // Row 0
+        guiGraphics.fill(x + 7 + 4 * 18, y + 17 + 2 * 18, x + 7 + 5 * 18, y + 17 + 3 * 18, 0xAA8B8B8B); // Row 2
     }
 
     @Override
@@ -184,9 +186,9 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
 
-        // Toggle slot position (row 2, col 4)
-        int slotX = x + 8 + 4 * 18;
-        int slotY = y + 18 + 2 * 18;
+        // Toggle slot position (top right - row 0, col 8)
+        int slotX = x + 8 + 8 * 18; // x + 8 + 144 = x + 152
+        int slotY = y + 18 + 0 * 18; // y + 18
 
         // Get the appropriate glass pane based on autoPickup mode state
         boolean autoPickupEnabled = menu.isAutoPickupEnabled();
@@ -215,9 +217,9 @@ public class RelicCoinBagScreen extends AbstractContainerScreen<RelicCoinBagMenu
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
 
-        // Toggle slot position (row 2, col 4)
-        int slotX = x + 8 + 4 * 18;
-        int slotY = y + 18 + 2 * 18;
+        // Toggle slot position (top right - row 0, col 8)
+        int slotX = x + 8 + 8 * 18; // x + 8 + 144 = x + 152
+        int slotY = y + 18 + 0 * 18; // y + 18
 
         // Check if mouse is hovering over the toggle slot (16x16 area)
         if (mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16) {

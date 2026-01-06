@@ -189,6 +189,14 @@ public class MerchantDebugStick extends Item {
             merchant.setCustomNameVisible(true);
         }
 
+        // Calculate rotation to face the player (done after data restoration to override saved rotation)
+        double dx = player.getX() - merchant.getX();
+        double dz = player.getZ() - merchant.getZ();
+        float yaw = (float) (Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0F;
+        merchant.setYRot(yaw);
+        merchant.setYHeadRot(yaw);
+        merchant.setYBodyRot(yaw);
+
         // Spawn the merchant
         level.addFreshEntity(merchant);
 

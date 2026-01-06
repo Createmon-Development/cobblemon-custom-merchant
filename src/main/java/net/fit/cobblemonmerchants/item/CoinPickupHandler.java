@@ -10,6 +10,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.util.TriState;
 import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 
 /**
@@ -73,7 +74,10 @@ public class CoinPickupHandler {
         player.playSound(net.minecraft.sounds.SoundEvents.ITEM_PICKUP, 0.2F,
             ((player.getRandom().nextFloat() - player.getRandom().nextFloat()) * 0.7F + 1.0F) * 2.0F);
 
-        // Remove the item entity from the world (this prevents the default pickup)
+        // Remove the item entity from the world
         itemEntity.discard();
+
+        // Prevent normal pickup to inventory (prevents duplication)
+        event.setCanPickup(TriState.FALSE);
     }
 }
