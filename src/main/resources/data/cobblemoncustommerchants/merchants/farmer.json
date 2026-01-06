@@ -1,15 +1,25 @@
 {
-  "display_name": "Basic Merchant",
-  "villager_biome": "minecraft:plains",
-  "villager_profession": "cobblemon:nurse",
+  "display_name": "Humble Farmer Merchant",
+  "villager_biome": "minecraft:savanna",
+  "villager_profession": "minecraft:farmer",
   "trades": [
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 3
+        "count": 16
       },
       "output": {
-        "id": "cobblemon:poke_ball",
+        "id": "luckyswardrobe:farmer_hat",
+        "count": 1
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 1
+      },
+      "output": {
+        "id": "minecraft:wheat_seeds",
         "count": 1
       }
     },
@@ -19,17 +29,7 @@
         "count": 3
       },
       "output": {
-        "id": "cobblemon:potion",
-        "count": 1
-      }
-    },
-    {
-      "input": {
-        "id": "cobblemon:relic_coin",
-        "count": 7
-      },
-      "output": {
-        "id": "cobblemon:super_potion",
+        "id": "vegandelight:soybean",
         "count": 1
       }
     },
@@ -39,8 +39,8 @@
         "count": 1
       },
       "output": {
-        "id": "minecraft:experience_bottle",
-        "count": 1
+        "id": "minecraft:rotten_flesh",
+        "count": 16
       }
     },
     {
@@ -49,8 +49,18 @@
         "count": 1
       },
       "output": {
-        "id": "minecraft:slime_ball",
+        "id": "minecraft:bone",
         "count": 8
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 8
+      },
+      "output": {
+        "id": "extradelight:apple_sapling",
+        "count": 1
       }
     }
   ]

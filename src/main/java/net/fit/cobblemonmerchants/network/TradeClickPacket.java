@@ -50,14 +50,14 @@ public record TradeClickPacket(int tradeIndex) implements CustomPacketPayload {
                     boolean success = menu.executeTrade(packet.tradeIndex, serverPlayer);
 
                     if (success) {
-                        // Play success sound at merchant location
+                        // Play success sound at merchant location (80% volume)
                         if (menu.getMerchant() != null) {
                             serverPlayer.level().playSound(
                                 null,
                                 menu.getMerchant().blockPosition(),
                                 SoundEvents.EXPERIENCE_ORB_PICKUP,
                                 SoundSource.BLOCKS,
-                                1.0F,
+                                0.8F,
                                 1.0F
                             );
                         }

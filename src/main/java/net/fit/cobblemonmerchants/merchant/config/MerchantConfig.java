@@ -41,34 +41,62 @@ public record MerchantConfig(
      */
     public MerchantOffers toMerchantOffers() {
         MerchantOffers offers = new MerchantOffers();
-        for (TradeEntry trade : trades) {
-            offers.add(trade.toMerchantOffer());
+        for (int i = 0; i < trades.size(); i++) {
+            TradeEntry trade = trades.get(i);
+            try {
+                MerchantOffer offer = trade.toMerchantOffer();
+                if (offer != null) {
+                    offers.add(offer);
+                }
+            } catch (Exception e) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "Failed to create trade {} for merchant '{}': {}",
+                    i, displayName, e.getMessage());
+                // Add a broken trade placeholder
+                offers.add(TradeEntry.createBrokenTradeOffer());
+            }
         }
         return offers;
     }
 
     /**
-     * Converts this config into MerchantOffers, applying variant overrides.
+     * Converts this config into MerchantOffers, applying variant overrides and filtering.
      *
      * @param variant The merchant variant (e.g., "default", "housed")
-     * @return MerchantOffers with variant-specific values applied
+     * @return MerchantOffers with variant-specific values applied, only including trades for this variant
      */
     public MerchantOffers toMerchantOffersForVariant(String variant) {
         MerchantOffers offers = new MerchantOffers();
-        for (TradeEntry trade : trades) {
-            offers.add(trade.toMerchantOfferForVariant(variant));
+        for (int i = 0; i < trades.size(); i++) {
+            TradeEntry trade = trades.get(i);
+            if (trade.appliesToVariant(variant)) {
+                try {
+                    MerchantOffer offer = trade.toMerchantOfferForVariant(variant);
+                    if (offer != null) {
+                        offers.add(offer);
+                    }
+                } catch (Exception e) {
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                        "Failed to create trade {} for merchant '{}' (variant: {}): {}",
+                        i, displayName, variant, e.getMessage());
+                    // Add a broken trade placeholder
+                    offers.add(TradeEntry.createBrokenTradeOffer());
+                }
+            }
         }
         return offers;
     }
 
     /**
-     * Gets trade entries (note: these are the base entries, use toMerchantOffersForVariant for variant-specific offers)
+     * Gets trade entries filtered by variant.
      *
-     * @param variant The merchant variant (unused, kept for API compatibility)
-     * @return List of all trade entries
+     * @param variant The merchant variant (e.g., "default", "housed")
+     * @return List of trade entries applicable to this variant
      */
     public List<TradeEntry> getTradesForVariant(String variant) {
-        return trades;
+        return trades.stream()
+            .filter(trade -> trade.appliesToVariant(variant))
+            .toList();
     }
 
     /**
@@ -96,32 +124,97 @@ public record MerchantConfig(
      *
      * @param variantOverrides Optional map of variant name -> overrides for that variant.
      *                         Allows different variants to have different prices/counts.
+     * @param dailyReset If true, the trade's max_uses resets at midnight each real-world day.
+     *                   If false (default), max_uses is permanent until server restart.
+     * @param variants Optional list of variant names this trade applies to.
+     *                 If empty/not specified, trade applies to all variants.
+     *                 If specified, trade only shows for merchants with matching variant.
+     * @param outputCount The raw output count from JSON (not capped by ItemStack limits).
+     *                    This allows trades with output counts > 64.
      */
     public record TradeEntry(
         ItemRequirement input,
         Optional<ItemRequirement> secondInput,
         ItemStack output,
+        int outputCount,
         int maxUses,
         int villagerXp,
         float priceMultiplier,
         Optional<String> tradeDisplayName,
         Optional<Integer> position,
-        Optional<Map<String, TradeVariantOverride>> variantOverrides
+        Optional<Map<String, TradeVariantOverride>> variantOverrides,
+        boolean dailyReset,
+        Optional<List<String>> variants
     ) {
+        /**
+         * A lenient ItemStack codec that falls back to a barrier item if parsing fails.
+         * This allows merchants to load even if some items are from missing mods.
+         * Also parses count separately to allow counts > 64.
+         */
+        private static final Codec<OutputWithCount> LENIENT_ITEMSTACK_WITH_COUNT_CODEC = Codec.PASSTHROUGH.comapFlatMap(
+            dynamic -> {
+                // Parse the raw count from JSON before ItemStack parsing caps it
+                int rawCount = dynamic.get("count").flatMap(d -> Codec.INT.parse(d)).result().orElse(1);
+
+                var result = ItemStack.CODEC.parse(dynamic);
+                if (result.error().isPresent()) {
+                    // Log the error but return a barrier as fallback
+                    String errorMsg = result.error().get().message();
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                        "Failed to parse output ItemStack, using barrier as fallback: {}", errorMsg);
+                    return com.mojang.serialization.DataResult.success(
+                        new OutputWithCount(new ItemStack(net.minecraft.world.item.Items.BARRIER, 1), rawCount));
+                }
+                return result.map(stack -> new OutputWithCount(stack, rawCount));
+            },
+            outputWithCount -> ItemStack.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, outputWithCount.stack())
+                .map(json -> new com.mojang.serialization.Dynamic<>(com.mojang.serialization.JsonOps.INSTANCE, json))
+                .result()
+                .orElseGet(() -> new com.mojang.serialization.Dynamic<>(
+                    com.mojang.serialization.JsonOps.INSTANCE,
+                    com.mojang.serialization.JsonOps.INSTANCE.empty()))
+        );
+
+        /**
+         * Helper record to hold both ItemStack and uncapped count during parsing.
+         */
+        private record OutputWithCount(ItemStack stack, int count) {}
+
         public static final Codec<TradeEntry> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
                 ItemRequirement.CODEC.fieldOf("input").forGetter(TradeEntry::input),
                 ItemRequirement.CODEC.optionalFieldOf("second_input").forGetter(TradeEntry::secondInput),
-                ItemStack.CODEC.fieldOf("output").forGetter(TradeEntry::output),
+                LENIENT_ITEMSTACK_WITH_COUNT_CODEC.fieldOf("output").forGetter(e -> new OutputWithCount(e.output(), e.outputCount())),
                 Codec.INT.optionalFieldOf("max_uses", Integer.MAX_VALUE).forGetter(TradeEntry::maxUses),
                 Codec.INT.optionalFieldOf("villager_xp", 0).forGetter(TradeEntry::villagerXp),
                 Codec.FLOAT.optionalFieldOf("price_multiplier", 0.0f).forGetter(TradeEntry::priceMultiplier),
                 Codec.STRING.optionalFieldOf("trade_display_name").forGetter(TradeEntry::tradeDisplayName),
                 Codec.INT.optionalFieldOf("position").forGetter(TradeEntry::position),
                 Codec.unboundedMap(Codec.STRING, TradeVariantOverride.CODEC)
-                    .optionalFieldOf("variant_overrides").forGetter(TradeEntry::variantOverrides)
-            ).apply(instance, TradeEntry::new)
+                    .optionalFieldOf("variant_overrides").forGetter(TradeEntry::variantOverrides),
+                Codec.BOOL.optionalFieldOf("daily_reset", false).forGetter(TradeEntry::dailyReset),
+                Codec.STRING.listOf().optionalFieldOf("variants").forGetter(TradeEntry::variants)
+            ).apply(instance, (input, secondInput, outputWithCount, maxUses, villagerXp, priceMultiplier,
+                               tradeDisplayName, position, variantOverrides, dailyReset, variants) ->
+                new TradeEntry(input, secondInput, outputWithCount.stack(), outputWithCount.count(),
+                    maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
+                    variantOverrides, dailyReset, variants))
         );
+
+        /**
+         * Checks if this trade applies to the given variant.
+         * If no variants are specified, the trade applies to all variants.
+         *
+         * @param merchantVariant The variant of the merchant (e.g., "default", "housed")
+         * @return true if this trade should be shown for the given variant
+         */
+        public boolean appliesToVariant(String merchantVariant) {
+            if (variants.isEmpty() || variants.get().isEmpty()) {
+                return true; // No variant restriction - applies to all
+            }
+            String variantToCheck = merchantVariant != null ? merchantVariant : "default";
+            return variants.get().contains(variantToCheck);
+        }
 
         /**
          * Gets the override for a specific variant, or null if none exists.
@@ -160,13 +253,14 @@ public record MerchantConfig(
 
         /**
          * Gets the effective output count for a variant (applies override if present).
+         * Uses the uncapped outputCount field to support counts > 64.
          */
         public int getOutputCountForVariant(String variant) {
             TradeVariantOverride override = getOverrideForVariant(variant);
             if (override != null && override.outputCount().isPresent()) {
                 return override.outputCount().get();
             }
-            return output.getCount();
+            return outputCount;
         }
 
         /**
@@ -192,7 +286,7 @@ public record MerchantConfig(
          * Converts this trade entry to a MerchantOffer with variant-specific values applied.
          *
          * @param variant The merchant variant (e.g., "default", "housed")
-         * @return MerchantOffer with variant overrides applied
+         * @return MerchantOffer with variant overrides applied, or null if the trade is invalid
          */
         public MerchantOffer toMerchantOfferForVariant(String variant) {
             // Get variant-specific values
@@ -200,8 +294,22 @@ public record MerchantConfig(
             int effectiveOutputCount = getOutputCountForVariant(variant);
             int effectiveMaxUses = getMaxUsesForVariant(variant);
 
+            // Check if output is valid (not empty/air)
+            if (output.isEmpty()) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "Trade has empty output item - trade will be shown as broken");
+                return createBrokenTradeOffer();
+            }
+
             // Create input cost with potentially modified count
             ItemCost inputCost = input.toItemCostWithCount(effectiveInputCount);
+
+            // Check if input cost is a barrier (indicates broken input)
+            if (inputCost.itemStack().getItem() == net.minecraft.world.item.Items.BARRIER) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "Trade has invalid input item (missing mod or empty tag) - trade will be shown as broken");
+                return createBrokenTradeOffer();
+            }
 
             // Create output with potentially modified count
             ItemStack outputStack = output.copy();
@@ -211,6 +319,14 @@ public record MerchantConfig(
                 // Two-item trade
                 int effectiveSecondInputCount = getSecondInputCountForVariant(variant);
                 ItemCost secondInputCost = secondInput.get().toItemCostWithCount(effectiveSecondInputCount);
+
+                // Check if second input is a barrier (indicates broken input)
+                if (secondInputCost.itemStack().getItem() == net.minecraft.world.item.Items.BARRIER) {
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                        "Trade has invalid second input item - trade will be shown as broken");
+                    return createBrokenTradeOffer();
+                }
+
                 return new MerchantOffer(
                     inputCost,
                     Optional.of(secondInputCost),
@@ -229,6 +345,19 @@ public record MerchantConfig(
                     priceMultiplier
                 );
             }
+        }
+
+        /**
+         * Creates a placeholder offer for broken trades that displays as a barrier block
+         */
+        public static MerchantOffer createBrokenTradeOffer() {
+            return new MerchantOffer(
+                new net.minecraft.world.item.trading.ItemCost(net.minecraft.world.item.Items.BARRIER, 1),
+                new ItemStack(net.minecraft.world.item.Items.BARRIER, 1),
+                0, // maxUses = 0 means always out of stock
+                0, // no XP
+                0.0f // no price multiplier
+            );
         }
     }
 

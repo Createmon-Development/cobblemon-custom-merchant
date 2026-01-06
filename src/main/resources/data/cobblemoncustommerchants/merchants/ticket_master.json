@@ -1,0 +1,37 @@
+{
+  "display_name": "Ticket Master",
+  "villager_biome": "minecraft:snow",
+  "villager_profession": "minecraft:cartographer",
+  "trades": [
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_red",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemon:poke_ball",
+        "count": 1
+      }
+    },
+    {
+      "input": {
+        "id": "skyscobblemonitems:event_ticket_red",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemon:potion",
+        "count": 1
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 1
+      },
+      "output": {
+        "id": "cobblemon:revive",
+        "count": 1
+      }
+    }
+  ]
+}

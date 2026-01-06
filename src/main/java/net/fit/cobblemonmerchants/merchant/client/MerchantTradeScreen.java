@@ -518,8 +518,8 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
                 }
             }
 
-            // Arrow and output
-            costLine.append(" §f-> ").append(entry.output().getCount()).append("x §r");
+            // Arrow and output (use outputCount() for uncapped count)
+            costLine.append(" §f-> ").append(entry.outputCount()).append("x §r");
             costLine.append(entry.output().getHoverName().getString());
 
             tooltip.add(Component.literal(costLine.toString()));
@@ -606,7 +606,7 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
                         // Success sound (experience orb at 30% volume, slightly lower pitch for single clean note)
                         Minecraft.getInstance().getSoundManager().play(
                             net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                                SoundEvents.EXPERIENCE_ORB_PICKUP, 0.3F, 0.9F
+                                SoundEvents.EXPERIENCE_ORB_PICKUP, 0.2F, 0.9F
                             )
                         );
                     } else {

@@ -53,36 +53,77 @@ public class ItemRequirement {
         return new ItemRequirement(null, tag, count, displayName, false);
     }
 
+    /**
+     * Creates a fallback ItemRequirement using a barrier item for broken/missing items.
+     */
+    private static ItemRequirement createBrokenItemRequirement(int count, String displayName) {
+        return new ItemRequirement(
+            new ItemStack(net.minecraft.world.item.Items.BARRIER, 1),
+            null,
+            count > 0 ? count : 1,
+            displayName,
+            false
+        );
+    }
+
     // Dispatch codec that checks for "tag" field to determine format
+    // This codec is lenient - if parsing fails, it returns a barrier item instead of failing
     public static final Codec<ItemRequirement> CODEC = Codec.PASSTHROUGH.comapFlatMap(
         dynamic -> {
-            // Check for optional display_name field
-            var displayNameField = dynamic.get("display_name");
-            String displayName = displayNameField.result().flatMap(d -> Codec.STRING.parse(d).result()).orElse(null);
+            try {
+                // Check for optional display_name field
+                var displayNameField = dynamic.get("display_name");
+                String displayName = displayNameField.result().flatMap(d -> Codec.STRING.parse(d).result()).orElse(null);
 
-            // Check for optional ignore_components field
-            var ignoreComponentsField = dynamic.get("ignore_components");
-            boolean ignoreComponents = ignoreComponentsField.result().flatMap(d -> Codec.BOOL.parse(d).result()).orElse(false);
+                // Check for optional ignore_components field
+                var ignoreComponentsField = dynamic.get("ignore_components");
+                boolean ignoreComponents = ignoreComponentsField.result().flatMap(d -> Codec.BOOL.parse(d).result()).orElse(false);
 
-            // Check if "tag" field exists
-            var tagField = dynamic.get("tag");
-            if (tagField.result().isPresent()) {
-                // Parse as tag format
-                var tagLocResult = ResourceLocation.CODEC.parse(tagField.result().get());
-                var countResult = dynamic.get("count").flatMap(d -> Codec.INT.parse(d));
+                // Get count for fallback purposes
+                int fallbackCount = dynamic.get("count").flatMap(d -> Codec.INT.parse(d)).result().orElse(1);
 
-                return tagLocResult.flatMap(tagLoc ->
-                    countResult.map(count -> {
-                        TagKey<Item> tag = TagKey.create(Registries.ITEM, tagLoc);
-                        return ItemRequirement.fromTag(tag, count, displayName);
-                    })
-                );
-            } else {
-                // Parse as ItemStack format
-                return ItemStack.CODEC.parse(dynamic).map(item ->
-                    displayName != null ? ItemRequirement.fromItem(item, displayName, ignoreComponents) :
-                        ignoreComponents ? ItemRequirement.fromItem(item, null, ignoreComponents) : ItemRequirement.fromItem(item)
-                );
+                // Check if "tag" field exists
+                var tagField = dynamic.get("tag");
+                if (tagField.result().isPresent()) {
+                    // Parse as tag format
+                    var tagLocResult = ResourceLocation.CODEC.parse(tagField.result().get());
+                    var countResult = dynamic.get("count").flatMap(d -> Codec.INT.parse(d));
+
+                    if (tagLocResult.error().isPresent() || countResult.error().isPresent()) {
+                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                            "Failed to parse tag-based ItemRequirement, using barrier as fallback");
+                        return com.mojang.serialization.DataResult.success(createBrokenItemRequirement(fallbackCount, displayName));
+                    }
+
+                    return tagLocResult.flatMap(tagLoc ->
+                        countResult.map(count -> {
+                            TagKey<Item> tag = TagKey.create(Registries.ITEM, tagLoc);
+                            return ItemRequirement.fromTag(tag, count, displayName);
+                        })
+                    );
+                } else {
+                    // Parse as ItemStack format, but handle count separately to allow counts > 64
+                    var itemResult = ItemStack.CODEC.parse(dynamic);
+                    if (itemResult.error().isPresent()) {
+                        String errorMsg = itemResult.error().get().message();
+                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                            "Failed to parse ItemRequirement ItemStack, using barrier as fallback: {}", errorMsg);
+                        return com.mojang.serialization.DataResult.success(createBrokenItemRequirement(fallbackCount, displayName));
+                    }
+
+                    return itemResult.map(item -> {
+                        // Get the count directly from JSON to bypass ItemStack's max stack size limit
+                        int rawCount = dynamic.get("count").flatMap(d -> Codec.INT.parse(d)).result().orElse(item.getCount());
+                        // Create a new ItemStack with the uncapped count for internal tracking
+                        ItemStack itemWithCount = item.copy();
+                        // Note: ItemStack.setCount() still caps, so we store the raw count in ItemRequirement
+                        return new ItemRequirement(itemWithCount, null, rawCount, displayName, ignoreComponents);
+                    });
+                }
+            } catch (Exception e) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "Exception while parsing ItemRequirement, using barrier as fallback: {}", e.getMessage());
+                return com.mojang.serialization.DataResult.success(createBrokenItemRequirement(1, null));
             }
         },
         req -> {
@@ -113,32 +154,35 @@ public class ItemRequirement {
                     )
                 );
             } else {
-                // Encode as ItemStack with optional display_name and ignore_components
+                // Encode as ItemStack with optional display_name, ignore_components, and uncapped count
                 var baseEncoding = ItemStack.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, req.exactItem)
                     .result().orElse(com.mojang.serialization.JsonOps.INSTANCE.empty());
 
-                if (req.displayName != null || req.ignoreComponents) {
-                    // Add display_name and/or ignore_components to the encoded item
-                    java.util.Map<com.google.gson.JsonElement, com.google.gson.JsonElement> itemMap = new java.util.HashMap<>();
-                    if (baseEncoding.isJsonObject()) {
-                        baseEncoding.getAsJsonObject().entrySet().forEach(e ->
-                            itemMap.put(new com.google.gson.JsonPrimitive(e.getKey()), e.getValue())
-                        );
-                    }
-                    if (req.displayName != null) {
-                        itemMap.put(
-                            com.mojang.serialization.JsonOps.INSTANCE.createString("display_name"),
-                            com.mojang.serialization.JsonOps.INSTANCE.createString(req.displayName)
-                        );
-                    }
-                    if (req.ignoreComponents) {
-                        itemMap.put(
-                            com.mojang.serialization.JsonOps.INSTANCE.createString("ignore_components"),
-                            com.mojang.serialization.JsonOps.INSTANCE.createBoolean(true)
-                        );
-                    }
-                    baseEncoding = com.mojang.serialization.JsonOps.INSTANCE.createMap(itemMap);
+                // Always rebuild the map to ensure we use the uncapped count
+                java.util.Map<com.google.gson.JsonElement, com.google.gson.JsonElement> itemMap = new java.util.HashMap<>();
+                if (baseEncoding.isJsonObject()) {
+                    baseEncoding.getAsJsonObject().entrySet().forEach(e ->
+                        itemMap.put(new com.google.gson.JsonPrimitive(e.getKey()), e.getValue())
+                    );
                 }
+                // Override count with uncapped value
+                itemMap.put(
+                    com.mojang.serialization.JsonOps.INSTANCE.createString("count"),
+                    com.mojang.serialization.JsonOps.INSTANCE.createInt(req.count)
+                );
+                if (req.displayName != null) {
+                    itemMap.put(
+                        com.mojang.serialization.JsonOps.INSTANCE.createString("display_name"),
+                        com.mojang.serialization.JsonOps.INSTANCE.createString(req.displayName)
+                    );
+                }
+                if (req.ignoreComponents) {
+                    itemMap.put(
+                        com.mojang.serialization.JsonOps.INSTANCE.createString("ignore_components"),
+                        com.mojang.serialization.JsonOps.INSTANCE.createBoolean(true)
+                    );
+                }
+                baseEncoding = com.mojang.serialization.JsonOps.INSTANCE.createMap(itemMap);
 
                 return new com.mojang.serialization.Dynamic<>(com.mojang.serialization.JsonOps.INSTANCE, baseEncoding);
             }
