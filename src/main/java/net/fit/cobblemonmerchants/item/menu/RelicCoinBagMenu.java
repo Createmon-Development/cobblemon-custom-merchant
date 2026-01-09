@@ -22,6 +22,8 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
     private final ItemStack bagStack;
     private final int bagSlot;
     private final ContainerData data;
+    private long lastWithdrawTime = 0; // Cooldown to prevent rapid shift-click withdrawals
+    private static final long WITHDRAW_COOLDOWN_MS = 250; // 250ms cooldown between shift-click withdrawals
 
     // Constructor for client side
     public RelicCoinBagMenu(int containerId, Inventory playerInventory, FriendlyByteBuf extraData) {
@@ -192,6 +194,14 @@ public class RelicCoinBagMenu extends AbstractContainerMenu {
                     }
                 } else if (clickType == net.minecraft.world.inventory.ClickType.QUICK_MOVE) {
                     // Shift-click: withdraw exactly 1 stack (64 coins) to inventory
+                    // Apply cooldown to prevent rapid withdrawals from holding shift+click
+                    long currentTime = System.currentTimeMillis();
+                    if (currentTime - lastWithdrawTime < WITHDRAW_COOLDOWN_MS) {
+                        // Still in cooldown, ignore this click
+                        return;
+                    }
+                    lastWithdrawTime = currentTime;
+
                     int toWithdraw = Math.min(getCoinCount(), 64);
                     net.minecraft.world.item.Item relicCoinItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
                         ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin"));

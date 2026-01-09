@@ -32,26 +32,6 @@
         "id": "cobblemon:super_potion",
         "count": 1
       }
-    },
-    {
-      "input": {
-        "id": "cobblemon:relic_coin",
-        "count": 1
-      },
-      "output": {
-        "id": "minecraft:experience_bottle",
-        "count": 1
-      }
-    },
-    {
-      "input": {
-        "id": "cobblemon:relic_coin",
-        "count": 1
-      },
-      "output": {
-        "id": "minecraft:slime_ball",
-        "count": 8
-      }
     }
   ]
 }
