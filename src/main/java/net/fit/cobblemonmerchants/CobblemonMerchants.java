@@ -105,7 +105,42 @@ public class CobblemonMerchants {
         net.fit.cobblemonmerchants.command.SpawnMerchantCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.RefreshBlackMarketCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.ResetDailyRewardsCommand.register(event.getDispatcher());
-        LOGGER.info("Registered /spawnmerchant, /refreshblackmarket, and /resetdailyrewards commands");
+        net.fit.cobblemonmerchants.ledger.LedgerCommand.register(event.getDispatcher());
+        LOGGER.info("Registered /spawnmerchant, /refreshblackmarket, /resetdailyrewards, and /ledger commands");
+    }
+
+    @SubscribeEvent
+    public void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event) {
+        // Finalize any pending transactions before server shuts down
+        try {
+            net.minecraft.server.level.ServerLevel overworld = event.getServer().overworld();
+            net.fit.cobblemonmerchants.ledger.TransactionLedger ledger =
+                net.fit.cobblemonmerchants.ledger.TransactionLedger.get(overworld);
+            ledger.finalizeAllPending();
+            LOGGER.info("Finalized pending transactions on server shutdown");
+        } catch (Exception e) {
+            LOGGER.error("Failed to finalize pending transactions", e);
+        }
+    }
+
+    // Counter for tick-based checks (check expired transactions every 20 ticks = 1 second)
+    private int tickCounter = 0;
+
+    @SubscribeEvent
+    public void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
+        // Check every 20 ticks (1 second) for expired pending transactions
+        tickCounter++;
+        if (tickCounter >= 20) {
+            tickCounter = 0;
+            try {
+                net.minecraft.server.level.ServerLevel overworld = event.getServer().overworld();
+                net.fit.cobblemonmerchants.ledger.TransactionLedger ledger =
+                    net.fit.cobblemonmerchants.ledger.TransactionLedger.get(overworld);
+                ledger.finalizeExpiredPending();
+            } catch (Exception e) {
+                // Silently ignore - ledger might not be ready yet
+            }
+        }
     }
 
     private void registerEntityAttributes(EntityAttributeCreationEvent event) {

@@ -410,6 +410,11 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             }
         }
 
+        // Record transaction in ledger
+        if (player instanceof ServerPlayer serverPlayer) {
+            recordTransactionToLedger(serverPlayer, tradeEntry, offer);
+        }
+
         // Mark for sync on next broadcastChanges
         needsSync = true;
 
@@ -497,10 +502,91 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
 
         offer.increaseUses();
 
+        // Record transaction in ledger for legacy trades
+        if (player instanceof ServerPlayer serverPlayer) {
+            recordLegacyTransactionToLedger(serverPlayer, offer);
+        }
+
         // Mark for sync on next broadcastChanges
         needsSync = true;
 
         return true;
+    }
+
+    /**
+     * Records a transaction to the ledger for trades with TradeEntry
+     */
+    private void recordTransactionToLedger(ServerPlayer player, net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry tradeEntry, MerchantOffer offer) {
+        if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            net.fit.cobblemonmerchants.ledger.TransactionLedger ledger =
+                net.fit.cobblemonmerchants.ledger.TransactionLedger.get(serverLevel);
+
+            String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
+            String merchantName = merchant.getDisplayName().getString();
+
+            // Get input item info from trade entry
+            String inputItem = getItemDisplayName(tradeEntry.input().getDisplayStack());
+            int inputCount = tradeEntry.input().getCount();
+
+            // Get output info
+            String outputItem = getItemDisplayName(offer.getResult());
+            int outputCount = tradeEntry.outputCount();
+
+            ledger.recordTransaction(
+                player.getUUID(),
+                player.getName().getString(),
+                merchantId,
+                merchantName,
+                inputItem,
+                inputCount,
+                outputItem,
+                outputCount
+            );
+        }
+    }
+
+    /**
+     * Records a transaction to the ledger for legacy trades (Black Market, etc.)
+     */
+    private void recordLegacyTransactionToLedger(ServerPlayer player, MerchantOffer offer) {
+        if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            net.fit.cobblemonmerchants.ledger.TransactionLedger ledger =
+                net.fit.cobblemonmerchants.ledger.TransactionLedger.get(serverLevel);
+
+            String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "black_market";
+            String merchantName = merchant.getDisplayName().getString();
+
+            // Get input item info
+            String inputItem = getItemDisplayName(offer.getItemCostA().itemStack());
+            int inputCount = offer.getItemCostA().count();
+
+            // Get output info
+            String outputItem = getItemDisplayName(offer.getResult());
+            int outputCount = offer.getResult().getCount();
+
+            ledger.recordTransaction(
+                player.getUUID(),
+                player.getName().getString(),
+                merchantId,
+                merchantName,
+                inputItem,
+                inputCount,
+                outputItem,
+                outputCount
+            );
+        }
+    }
+
+    /**
+     * Gets a display name for an item stack
+     */
+    private String getItemDisplayName(ItemStack stack) {
+        if (stack.isEmpty()) return "empty";
+
+        // Use registry name for consistency
+        net.minecraft.resources.ResourceLocation itemId =
+            net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return itemId.toString();
     }
 
     /**
