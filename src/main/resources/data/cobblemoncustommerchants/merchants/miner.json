@@ -29,27 +29,7 @@
         "count": 4
       },
       "output": {
-        "id": "create:asurine",
-        "count": 64
-      }
-    },
-    {
-      "input": {
-        "id": "cobblemon:relic_coin",
-        "count": 4
-      },
-      "output": {
         "id": "create:limestone",
-        "count": 64
-      }
-    },
-    {
-      "input": {
-        "id": "cobblemon:relic_coin",
-        "count": 4
-      },
-      "output": {
-        "id": "create:ochrum",
         "count": 64
       }
     },

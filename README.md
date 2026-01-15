@@ -37,6 +37,63 @@ Spawn a custom merchant at your location.
 /spawnmerchant cobblemoncustommerchants:basic minecraft:desert cobblemon:nurse
 ```
 
+### `/refreshblackmarket`
+
+Force refresh the Black Market inventory for testing purposes.
+
+**Usage:**
+```
+/refreshblackmarket
+```
+
+### `/resetdailyrewards`
+
+Reset daily reward limits for all players.
+
+**Usage:**
+```
+/resetdailyrewards
+```
+
+### `/ledger`
+
+Manage and view transaction history for all merchant trades. Most commands require OP level 2.
+
+**Subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `/ledger summary` | Show transaction summary with top merchants, items, and traders |
+| `/ledger export` | Export all transactions to a timestamped CSV file |
+| `/ledger player <player> history` | Show transaction history for a specific player |
+| `/ledger player <player> summary` | Show summary stats for a specific player |
+| `/ledger me` | View your own summary (no OP required) |
+| `/ledger merchant <merchantId>` | Show transactions for a specific merchant type |
+| `/ledger top merchants` | Show top 10 busiest merchants |
+| `/ledger top items` | Show top 10 most purchased items |
+| `/ledger top players` | Show top 10 most active traders |
+| `/ledger webhook set <url>` | Configure webhook URL for syncing |
+| `/ledger webhook sync` | Sync unsynced transactions to the webhook |
+| `/ledger webhook sync reset` | Clear sync tracking for full re-sync |
+| `/ledger webhook disable` | Disable webhook sync |
+| `/ledger webhook status` | Check webhook configuration and sync status |
+| `/ledger clear confirm` | Clear all transaction data (dangerous!) |
+
+**Examples:**
+```
+/ledger summary
+/ledger export
+/ledger player Steve history
+/ledger player Steve summary
+/ledger me
+/ledger merchant cobblemoncustommerchants:basic
+/ledger top items
+/ledger webhook set "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+/ledger webhook sync
+/ledger webhook sync reset
+/ledger webhook status
+```
+
 ## Merchant Configuration
 
 Merchants are configured using JSON files placed in `data/<namespace>/merchants/<merchant_id>.json`.
@@ -349,6 +406,157 @@ The Black Market merchant type has special behavior with dynamic pricing:
 - Per-player unique offers based on UUID
 - Prices calculated from rarity, exclusivity, and craftability
 - Leave `trades` array empty for automatic generation
+
+## Transaction Ledger
+
+The mod automatically tracks all merchant transactions in a persistent ledger. Transactions are bundled if the same player makes identical trades within 10 seconds, then automatically finalized after the bundle window expires.
+
+### Features
+
+- **Automatic CSV Export**: Transactions are automatically appended to `merchant_transactions.csv` in the world save directory
+- **Full Export**: Use `/ledger export` to create a timestamped full export
+- **Diagnostics**: View trade volume by merchant, player activity, and popular items
+- **Player Self-Service**: Players can view their own trading summary with `/ledger me` (no OP required)
+- **Google Sheets Integration**: Sync transactions to Google Sheets via webhook with duplicate tracking
+- **Coin Statistics**: Track relic coin earnings and spending per player/merchant
+
+### CSV File Location
+
+The auto-append CSV file is created in the world save directory:
+```
+<world_save_directory>/merchant_transactions.csv
+```
+
+Full exports are created at:
+```
+<world_save_directory>/merchant_transactions_export_YYYYMMDD_HHmmss.csv
+```
+
+### CSV Columns
+
+| Column | Description |
+|--------|-------------|
+| `transaction_id` | Unique identifier for the transaction |
+| `timestamp` | Human-readable timestamp (HH:mm:ss_MM-dd-yy) |
+| `player_uuid` | Player's UUID |
+| `player_name` | Player's display name |
+| `merchant_id` | Merchant type (e.g., `cobblemoncustommerchants:basic`) |
+| `merchant_name` | Merchant's display name |
+| `quantity` | Number of identical trades bundled |
+| `input_item` | Item given by player |
+| `input_count` | Count per trade |
+| `output_item` | Item received by player |
+| `output_count` | Count per trade |
+| `coin_change` | Relic coin change (+X if earned, -X if spent, 0 if no coins)
+
+## Google Sheets Integration
+
+The easiest way to sync transactions to Google Sheets is using a webhook with Google Apps Script. This requires no external dependencies.
+
+### Setup Instructions
+
+#### Step 1: Create a Google Sheet
+
+1. Go to [Google Sheets](https://sheets.google.com) and create a new spreadsheet
+2. Name it something like "Merchant Transactions"
+3. Add headers in Row 1 (columns A-L):
+   ```
+   Transaction ID | Timestamp | Player UUID | Player Name | Merchant ID | Merchant Name | Quantity | Input Item | Input Count | Output Item | Output Count | Coin Change
+   ```
+
+#### Step 2: Create the Google Apps Script
+
+1. In your Google Sheet, go to **Extensions > Apps Script**
+2. Delete any existing code and paste this script:
+
+```javascript
+function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+
+    // Append a new row with the transaction data
+    sheet.appendRow([
+      data.transactionId,
+      data.timestamp,
+      data.playerUuid,
+      data.playerName,
+      data.merchantId,
+      data.merchantName,
+      data.quantity,
+      data.inputItem,
+      data.inputCount,
+      data.outputItem,
+      data.outputCount,
+      data.coinChange || "0"
+    ]);
+
+    return ContentService.createTextOutput("OK");
+  } catch (error) {
+    return ContentService.createTextOutput("Error: " + error.toString());
+  }
+}
+```
+
+3. Click **Save** (Ctrl+S)
+4. Name the project (e.g., "Merchant Webhook")
+
+**Important:** If you're updating an existing script, you must create a **New deployment** for changes to take effect (see Step 3).
+
+#### Step 3: Deploy as Web App
+
+1. Click **Deploy > New deployment**
+2. Click the gear icon next to "Select type" and choose **Web app**
+3. Configure:
+   - **Description**: "Merchant Transaction Webhook"
+   - **Execute as**: Me
+   - **Who has access**: Anyone
+4. Click **Deploy**
+5. Click **Authorize access** and follow the prompts to allow the script
+6. **Copy the Web app URL** - it will look like:
+   ```
+   https://script.google.com/macros/s/AKfycb.../exec
+   ```
+
+#### Step 4: Configure the Webhook In-Game
+
+Run this command with your webhook URL:
+```
+/ledger webhook set "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+```
+
+Check the status:
+```
+/ledger webhook status
+```
+
+#### Step 5: Test and Sync
+
+New transactions will automatically sync to Google Sheets. To sync existing transactions:
+```
+/ledger webhook sync
+```
+
+The webhook tracks which transactions have been synced to prevent duplicates. To force a full re-sync (e.g., after clearing your spreadsheet):
+```
+/ledger webhook sync reset
+/ledger webhook sync
+```
+
+### Troubleshooting Google Sheets
+
+**Webhook not working:**
+- Ensure the URL starts with `https://`
+- Check that the Apps Script is deployed as "Anyone" can access
+- Look at server logs for error messages
+
+**Missing transactions:**
+- Use `/ledger webhook sync` to bulk sync all existing transactions
+- Check the Apps Script execution log in Google Apps Script dashboard
+
+**Rate limiting:**
+- Bulk sync sends transactions with 100ms delays to avoid overwhelming the endpoint
+- If you have thousands of transactions, the sync may take several minutes
 
 ## Dependencies
 
