@@ -2,6 +2,8 @@
   "display_name": "Treasure Hunter",
   "villager_biome": "minecraft:desert",
   "villager_profession": "minecraft:cartographer",
+  "action_id": "cobblemoncustommerchants:treasure_hunter_dialogue",
+  "action_before_trade": true,
   "trades": [
     {
       "input": {

@@ -9,6 +9,9 @@ import net.fit.cobblemonmerchants.merchant.CustomMerchantEntity;
 import net.fit.cobblemonmerchants.merchant.ModEntities;
 import net.fit.cobblemonmerchants.merchant.config.MerchantConfig;
 import net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry;
+import net.fit.cobblemonmerchants.npc.AssistantNPCEntity;
+import net.fit.cobblemonmerchants.npc.NPCConfig;
+import net.fit.cobblemonmerchants.npc.NPCConfigRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -17,25 +20,30 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Map;
-
 /**
- * Command for spawning merchants: /spawnmerchant <merchant_type> [villager_biome] [villager_profession] [variant]
+ * Unified command for spawning custom merchants and NPCs:
+ * /spawncm merchant <type> [biome] [profession] [variant]
+ * /spawncm npc <type> [biome] [profession] [variant]
+ *
  * Use "_" as a placeholder for biome/profession to use the config default.
- * Example: /spawnmerchant cobblemoncustommerchants:gambler _ _ housed
+ *
+ * Examples:
+ *   /spawncm merchant cobblemoncustommerchants:treasure_hunter _ _ housed
+ *   /spawncm npc cobblemoncustommerchants:treasure_hunter_assistant _ _ temple
  */
 public class SpawnMerchantCommand {
 
-    private static final SuggestionProvider<CommandSourceStack> MERCHANT_TYPE_SUGGESTIONS = (context, builder) -> {
-        Map<ResourceLocation, MerchantConfig> configs = MerchantConfigRegistry.getAllConfigs();
-        return SharedSuggestionProvider.suggestResource(configs.keySet(), builder);
+    private static final SuggestionProvider<CommandSourceStack> MERCHANT_SUGGESTIONS = (context, builder) -> {
+        return SharedSuggestionProvider.suggestResource(MerchantConfigRegistry.getAllConfigs().keySet(), builder);
+    };
+
+    private static final SuggestionProvider<CommandSourceStack> NPC_SUGGESTIONS = (context, builder) -> {
+        return SharedSuggestionProvider.suggestResource(NPCConfigRegistry.getAllConfigs().keySet(), builder);
     };
 
     private static final SuggestionProvider<CommandSourceStack> BIOME_SUGGESTIONS = (context, builder) -> {
-        // Suggest "_" for default plus common biomes
         return SharedSuggestionProvider.suggest(new String[]{
             "_", "minecraft:plains", "minecraft:desert", "minecraft:jungle",
             "minecraft:savanna", "minecraft:snow", "minecraft:swamp", "minecraft:taiga"
@@ -43,7 +51,6 @@ public class SpawnMerchantCommand {
     };
 
     private static final SuggestionProvider<CommandSourceStack> PROFESSION_SUGGESTIONS = (context, builder) -> {
-        // Suggest "_" for default plus common professions
         return SharedSuggestionProvider.suggest(new String[]{
             "_", "minecraft:none", "minecraft:armorer", "minecraft:butcher",
             "minecraft:cartographer", "minecraft:cleric", "minecraft:farmer",
@@ -54,26 +61,59 @@ public class SpawnMerchantCommand {
     };
 
     private static final SuggestionProvider<CommandSourceStack> VARIANT_SUGGESTIONS = (context, builder) -> {
-        // Suggest common variant names
-        return SharedSuggestionProvider.suggest(new String[]{"default", "housed"}, builder);
+        return SharedSuggestionProvider.suggest(new String[]{"default", "housed", "temple"}, builder);
     };
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
-            Commands.literal("spawnmerchant")
-                .requires(source -> source.hasPermission(2)) // OP level 2
-                .then(Commands.argument("merchant_type", ResourceLocationArgument.id())
-                    .suggests(MERCHANT_TYPE_SUGGESTIONS)
-                    .executes(SpawnMerchantCommand::spawnMerchant)
-                    .then(Commands.argument("villager_biome", StringArgumentType.word())
-                        .suggests(BIOME_SUGGESTIONS)
-                        .executes(SpawnMerchantCommand::spawnMerchantWithBiome)
-                        .then(Commands.argument("villager_profession", StringArgumentType.word())
-                            .suggests(PROFESSION_SUGGESTIONS)
-                            .executes(SpawnMerchantCommand::spawnMerchantWithProfession)
-                            .then(Commands.argument("variant", StringArgumentType.word())
-                                .suggests(VARIANT_SUGGESTIONS)
-                                .executes(SpawnMerchantCommand::spawnMerchantWithVariant)
+            Commands.literal("spawncm")
+                .requires(source -> source.hasPermission(2))
+                // /spawncm merchant <type> [biome] [profession] [variant]
+                .then(Commands.literal("merchant")
+                    .then(Commands.argument("type", ResourceLocationArgument.id())
+                        .suggests(MERCHANT_SUGGESTIONS)
+                        .executes(ctx -> spawnMerchantCmd(ctx, null, null, null))
+                        .then(Commands.argument("biome", StringArgumentType.word())
+                            .suggests(BIOME_SUGGESTIONS)
+                            .executes(ctx -> spawnMerchantCmd(ctx,
+                                StringArgumentType.getString(ctx, "biome"), null, null))
+                            .then(Commands.argument("profession", StringArgumentType.word())
+                                .suggests(PROFESSION_SUGGESTIONS)
+                                .executes(ctx -> spawnMerchantCmd(ctx,
+                                    StringArgumentType.getString(ctx, "biome"),
+                                    StringArgumentType.getString(ctx, "profession"), null))
+                                .then(Commands.argument("variant", StringArgumentType.word())
+                                    .suggests(VARIANT_SUGGESTIONS)
+                                    .executes(ctx -> spawnMerchantCmd(ctx,
+                                        StringArgumentType.getString(ctx, "biome"),
+                                        StringArgumentType.getString(ctx, "profession"),
+                                        StringArgumentType.getString(ctx, "variant")))
+                                )
+                            )
+                        )
+                    )
+                )
+                // /spawncm npc <type> [biome] [profession] [variant]
+                .then(Commands.literal("npc")
+                    .then(Commands.argument("type", ResourceLocationArgument.id())
+                        .suggests(NPC_SUGGESTIONS)
+                        .executes(ctx -> spawnNPCCmd(ctx, null, null, null))
+                        .then(Commands.argument("biome", StringArgumentType.word())
+                            .suggests(BIOME_SUGGESTIONS)
+                            .executes(ctx -> spawnNPCCmd(ctx,
+                                StringArgumentType.getString(ctx, "biome"), null, null))
+                            .then(Commands.argument("profession", StringArgumentType.word())
+                                .suggests(PROFESSION_SUGGESTIONS)
+                                .executes(ctx -> spawnNPCCmd(ctx,
+                                    StringArgumentType.getString(ctx, "biome"),
+                                    StringArgumentType.getString(ctx, "profession"), null))
+                                .then(Commands.argument("variant", StringArgumentType.word())
+                                    .suggests(VARIANT_SUGGESTIONS)
+                                    .executes(ctx -> spawnNPCCmd(ctx,
+                                        StringArgumentType.getString(ctx, "biome"),
+                                        StringArgumentType.getString(ctx, "profession"),
+                                        StringArgumentType.getString(ctx, "variant")))
+                                )
                             )
                         )
                     )
@@ -81,93 +121,119 @@ public class SpawnMerchantCommand {
         );
     }
 
-    private static int spawnMerchant(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        return spawnMerchantInternal(context, null, null, null);
-    }
-
-    private static int spawnMerchantWithBiome(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String biome = StringArgumentType.getString(context, "villager_biome");
-        return spawnMerchantInternal(context, biome, null, null);
-    }
-
-    private static int spawnMerchantWithProfession(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String biome = StringArgumentType.getString(context, "villager_biome");
-        String profession = StringArgumentType.getString(context, "villager_profession");
-        return spawnMerchantInternal(context, biome, profession, null);
-    }
-
-    private static int spawnMerchantWithVariant(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String biome = StringArgumentType.getString(context, "villager_biome");
-        String profession = StringArgumentType.getString(context, "villager_profession");
-        String variant = StringArgumentType.getString(context, "variant");
-        return spawnMerchantInternal(context, biome, profession, variant);
-    }
-
-    private static int spawnMerchantInternal(CommandContext<CommandSourceStack> context,
-            String overrideBiome, String overrideProfession, String variant) throws CommandSyntaxException {
-        CommandSourceStack source = context.getSource();
-        ResourceLocation merchantTypeId = ResourceLocationArgument.getId(context, "merchant_type");
+    private static int spawnMerchantCmd(CommandContext<CommandSourceStack> ctx,
+            String biome, String profession, String variant) throws CommandSyntaxException {
+        CommandSourceStack source = ctx.getSource();
+        ResourceLocation typeId = ResourceLocationArgument.getId(ctx, "type");
         ServerLevel level = source.getLevel();
         Vec3 position = source.getPosition();
 
-        // Get merchant config
-        MerchantConfig config = MerchantConfigRegistry.getConfig(merchantTypeId);
+        // Treat "_" or "-" as placeholder
+        if ("_".equals(biome) || "-".equals(biome)) biome = null;
+        if ("_".equals(profession) || "-".equals(profession)) profession = null;
+
+        MerchantConfig config = MerchantConfigRegistry.getConfig(typeId);
         if (config == null) {
-            source.sendFailure(Component.literal("Unknown merchant type: " + merchantTypeId));
+            source.sendFailure(Component.literal("Unknown merchant type: " + typeId));
             return 0;
         }
 
-        // Treat "_" or "-" as placeholder (use config default)
-        if ("_".equals(overrideBiome) || "-".equals(overrideBiome)) overrideBiome = null;
-        if ("_".equals(overrideProfession) || "-".equals(overrideProfession)) overrideProfession = null;
+        return spawnMerchant(source, level, position, typeId, config, biome, profession, variant);
+    }
 
-        // Create merchant entity
+    private static int spawnNPCCmd(CommandContext<CommandSourceStack> ctx,
+            String biome, String profession, String variant) throws CommandSyntaxException {
+        CommandSourceStack source = ctx.getSource();
+        ResourceLocation typeId = ResourceLocationArgument.getId(ctx, "type");
+        ServerLevel level = source.getLevel();
+        Vec3 position = source.getPosition();
+
+        // Treat "_" or "-" as placeholder
+        if ("_".equals(biome) || "-".equals(biome)) biome = null;
+        if ("_".equals(profession) || "-".equals(profession)) profession = null;
+
+        NPCConfig config = NPCConfigRegistry.getConfig(typeId);
+        if (config == null) {
+            source.sendFailure(Component.literal("Unknown NPC type: " + typeId));
+            return 0;
+        }
+
+        return spawnNPC(source, level, position, typeId, config, biome, profession, variant);
+    }
+
+    private static int spawnMerchant(CommandSourceStack source, ServerLevel level, Vec3 position,
+            ResourceLocation merchantTypeId, MerchantConfig config,
+            String overrideBiome, String overrideProfession, String variant) {
+
         CustomMerchantEntity merchant = new CustomMerchantEntity(ModEntities.CUSTOM_MERCHANT.get(), level);
 
-        // Set position (spawn at player's position)
         BlockPos spawnPos = BlockPos.containing(position);
         merchant.setPos(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
 
-        // Set rotation to face the player who spawned it
         merchant.setYRot(source.getRotation().y);
         merchant.setYHeadRot(source.getRotation().y);
 
-        // Configure merchant
         merchant.setCustomName(Component.literal(config.displayName()));
         merchant.setCustomNameVisible(true);
 
-        // Set villager biome (use override if provided, otherwise use config, default to plains)
         String biome = overrideBiome != null ? overrideBiome : config.villagerBiome().orElse("plains");
         merchant.setVillagerBiome(biome);
 
-        // Set villager profession (use override if provided, otherwise use config, default to none)
         String profession = overrideProfession != null ? overrideProfession : config.villagerProfession().orElse("none");
         merchant.setVillagerProfession(profession);
 
-        // Set merchant type based on ID
         if (merchantTypeId.equals(ResourceLocation.fromNamespaceAndPath("cobblemoncustommerchants", "black_market"))) {
             merchant.setMerchantType(CustomMerchantEntity.MerchantType.BLACK_MARKET);
         } else {
             merchant.setMerchantType(CustomMerchantEntity.MerchantType.REGULAR);
         }
 
-        // Store the trader ID for future reference
         merchant.setTraderId(merchantTypeId);
 
-        // Set variant (affects daily rewards and variant-specific trades)
         if (variant != null && !variant.isEmpty()) {
             merchant.setMerchantVariant(variant);
         }
 
-        // Reload trades from config - this filters by variant and populates tradeEntries list
         merchant.reloadTradesFromConfig();
-
-        // Spawn the merchant
         level.addFreshEntity(merchant);
 
-        // Send success message
         String variantInfo = variant != null ? " (variant: " + variant + ")" : "";
         source.sendSuccess(() -> Component.literal("Spawned merchant: " + config.displayName() + variantInfo), true);
+
+        return 1;
+    }
+
+    private static int spawnNPC(CommandSourceStack source, ServerLevel level, Vec3 position,
+            ResourceLocation npcTypeId, NPCConfig config,
+            String overrideBiome, String overrideProfession, String variant) {
+
+        AssistantNPCEntity npc = new AssistantNPCEntity(ModEntities.ASSISTANT_NPC.get(), level);
+
+        BlockPos spawnPos = BlockPos.containing(position);
+        npc.setPos(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
+
+        npc.setYRot(source.getRotation().y);
+        npc.setYHeadRot(source.getRotation().y);
+
+        npc.setNPCId(npcTypeId);
+
+        if (variant != null && !variant.isEmpty()) {
+            npc.setNPCVariant(variant);
+        }
+
+        String biome = overrideBiome != null ? overrideBiome : config.getBiome();
+        npc.setVillagerBiome(biome);
+
+        String profession = overrideProfession != null ? overrideProfession : config.getProfession();
+        npc.setVillagerProfession(profession);
+
+        npc.setCustomName(Component.literal(config.displayName()));
+        npc.setCustomNameVisible(true);
+
+        level.addFreshEntity(npc);
+
+        String variantInfo = variant != null ? " (variant: " + variant + ")" : "";
+        source.sendSuccess(() -> Component.literal("Spawned NPC: " + config.displayName() + variantInfo), true);
 
         return 1;
     }

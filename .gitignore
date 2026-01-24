@@ -22,3 +22,7 @@ bin/
 # Minecraft development
 logs/
 crash-reports/
+
+# Project-specific
+CRYSTAL_ASCENDANCY_QUEST_IMPLEMENTATION.md
+script.txt

@@ -75,6 +75,14 @@ public class CobblemonMerchants {
         // Register merchant config reload listener
         event.addListener(net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getInstance());
         LOGGER.info("Registered merchant config reload listener");
+
+        // Register NPC config reload listener
+        event.addListener(net.fit.cobblemonmerchants.npc.NPCConfigRegistry.getInstance());
+        LOGGER.info("Registered NPC config reload listener");
+
+        // Register action config reload listener
+        event.addListener(net.fit.cobblemonmerchants.action.ActionConfigRegistry.getInstance());
+        LOGGER.info("Registered action config reload listener");
     }
 
     @SubscribeEvent
@@ -111,7 +119,8 @@ public class CobblemonMerchants {
         net.fit.cobblemonmerchants.command.ResetDailyRewardsCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.DailyCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.ledger.LedgerCommand.register(event.getDispatcher());
-        LOGGER.info("Registered /spawnmerchant, /refreshblackmarket, /resetdailyrewards, /daily, and /ledger commands");
+        net.fit.cobblemonmerchants.command.NPCTeleportCommand.register(event.getDispatcher());
+        LOGGER.info("Registered commands: /spawncm, /refreshblackmarket, /resetdailyrewards, /daily, /ledger, /npcteleport");
     }
 
     @SubscribeEvent
@@ -151,6 +160,8 @@ public class CobblemonMerchants {
     private void registerEntityAttributes(EntityAttributeCreationEvent event) {
         event.put(ModEntities.CUSTOM_MERCHANT.get(),
                 net.fit.cobblemonmerchants.merchant.CustomMerchantEntity.createAttributes().build());
+        event.put(ModEntities.ASSISTANT_NPC.get(),
+                net.fit.cobblemonmerchants.npc.AssistantNPCEntity.createAttributes().build());
     }
 
     // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
@@ -160,6 +171,10 @@ public class CobblemonMerchants {
         public static void registerEntityRenderers(net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
             event.registerEntityRenderer(
                 net.fit.cobblemonmerchants.merchant.ModEntities.CUSTOM_MERCHANT.get(),
+                ctx -> new net.minecraft.client.renderer.entity.VillagerRenderer(ctx)
+            );
+            event.registerEntityRenderer(
+                net.fit.cobblemonmerchants.merchant.ModEntities.ASSISTANT_NPC.get(),
                 ctx -> new net.minecraft.client.renderer.entity.VillagerRenderer(ctx)
             );
         }

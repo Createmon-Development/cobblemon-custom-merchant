@@ -222,12 +222,52 @@ public class CustomMerchantEntity extends Villager {
             }
         }
 
-        // Open custom chest-style trading GUI
         if (!this.level().isClientSide && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             this.setTradingPlayer(player);
+
+            // Check for action configuration
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig config =
+                net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(this.traderId);
+
+            if (config != null && config.actionId().isPresent()) {
+                net.minecraft.resources.ResourceLocation actionId =
+                    net.minecraft.resources.ResourceLocation.parse(config.actionId().get());
+
+                if (config.actionBeforeTrade()) {
+                    // Execute dialogue, then open trade menu on completion
+                    net.fit.cobblemonmerchants.action.ActionExecutor.executeDialogue(
+                        serverPlayer, this, actionId,
+                        () -> openCustomTradeScreen(serverPlayer)
+                    );
+                } else {
+                    // Dialogue only, no trade menu
+                    net.fit.cobblemonmerchants.action.ActionExecutor.executeDialogue(
+                        serverPlayer, this, actionId, null
+                    );
+                }
+                return InteractionResult.sidedSuccess(this.level().isClientSide);
+            }
+
+            // Default: open trade screen directly
             openCustomTradeScreen(serverPlayer);
         }
         return InteractionResult.sidedSuccess(this.level().isClientSide);
+    }
+
+    /**
+     * Gets the merchant's display name for dialogue speakers.
+     */
+    public String getMerchantDisplayName() {
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig config =
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(this.traderId);
+        if (config != null) {
+            return config.displayName();
+        }
+        Component customName = this.getCustomName();
+        if (customName != null) {
+            return customName.getString();
+        }
+        return "Merchant";
     }
 
     /**

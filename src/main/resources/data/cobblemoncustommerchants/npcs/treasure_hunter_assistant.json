@@ -1,0 +1,13 @@
+{
+  "display_name": "Treasure Hunter's Assistant",
+  "villager_biome": "minecraft:desert",
+  "villager_profession": "minecraft:cartographer",
+  "action_id": "cobblemoncustommerchants:treasure_hunter_assistant",
+  "trade_menu_enabled": false,
+  "variants": {
+    "temple": {
+      "action_id": "cobblemoncustommerchants:treasure_hunter_assistant_temple",
+      "display_name": "Treasure Hunter's Assistant"
+    }
+  }
+}

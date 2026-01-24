@@ -1,0 +1,128 @@
+{
+  "description": "Treasure Hunter's Assistant dialogue at the temple for Crystal Ascendancy quest",
+  "dialogue_lines": [
+    {
+      "id": "has_tablet_celebrate",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "&6You actually did it! I thought I'd never see you again.",
+      "conditions": [
+        {"type": "has_item", "item": "skyscobblemonitems:ancient_tablet"}
+      ],
+      "priority": 100,
+      "repeatable": false,
+      "actions": [
+        {"type": "play_sound", "sound": "minecraft:entity.player.levelup"}
+      ],
+      "next": "return_home_prompt"
+    },
+    {
+      "id": "return_home_prompt",
+      "type": "dialogue",
+      "text": "&6Now that our celebrations are over, it's time for you to return home. Bring this tablet to the Treasure Hunter in his studies.",
+      "repeatable": true,
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "teleport"}],
+          "next": "return_has_teleport"
+        }
+      ],
+      "default": "return_no_teleport"
+    },
+    {
+      "id": "return_has_teleport",
+      "type": "dialogue",
+      "text": "&6Lovely, you brought your &b<pokemon_name> &6with you. They'll help you get home in a jiffy!",
+      "repeatable": true,
+      "actions": [
+        {"type": "teleport_option", "text": "&9[Teleport to Treasure Hunter's Studies]", "hover_text": "Click to teleport back to the Treasure Hunter", "destination": {"x": 0, "y": 64, "z": 0, "dimension": "minecraft:overworld"}}
+      ],
+      "end": true
+    },
+    {
+      "id": "return_no_teleport",
+      "type": "dialogue",
+      "text": "&6It's a long journey back. Good luck, traveler!",
+      "repeatable": true,
+      "actions": [
+        {"type": "teleport_option", "text": "&9[Teleport to Treasure Hunter's Studies]", "hover_text": "Click to teleport back to the Treasure Hunter", "destination": {"x": 0, "y": 64, "z": 0, "dimension": "minecraft:overworld"}}
+      ],
+      "end": true
+    },
+    {
+      "id": "greeting",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "&6You made it! Long trek eh?",
+      "priority": 50,
+      "repeatable": false,
+      "next": "spawn_warning"
+    },
+    {
+      "id": "spawn_warning",
+      "type": "dialogue",
+      "text": "&6That temple is messy business, you may want to set your spawn somewhere in case you end up sleeping with the fishes.",
+      "actions": [
+        {"type": "atmospheric", "text": "The assistant glances nervously at the ominous temple entrance..."}
+      ],
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "dive"}],
+          "next": "has_dive"
+        }
+      ],
+      "default": "no_dive"
+    },
+    {
+      "id": "no_dive",
+      "type": "dialogue",
+      "text": "&6Bold of you to brave the temple without the help of your Pokemon. To each their own, best of luck!",
+      "repeatable": true,
+      "end": true
+    },
+    {
+      "id": "has_dive",
+      "type": "dialogue",
+      "text": "&6It looks like you're all set to face the temple! Your &b<pokemon_name> &6will be helping you out.",
+      "repeatable": true,
+      "actions": [
+        {"type": "apply_effect", "effect": "minecraft:water_breathing", "duration": 36000, "amplifier": 0},
+        {"type": "play_sound", "sound": "minecraft:entity.player.levelup"},
+        {"type": "atmospheric", "text": "Return to the Treasure Hunter's Assistant near the temple to refresh this effect."}
+      ],
+      "end": true
+    },
+    {
+      "id": "return_greeting",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "&6Welcome back! Need another dose of water breathing?",
+      "priority": 10,
+      "repeatable": true,
+      "conditions": [],
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "dive"}],
+          "next": "refresh_water_breathing"
+        }
+      ],
+      "default": "no_dive_repeat"
+    },
+    {
+      "id": "refresh_water_breathing",
+      "type": "dialogue",
+      "text": "&6Here you go! Good luck in there.",
+      "actions": [
+        {"type": "apply_effect", "effect": "minecraft:water_breathing", "duration": 36000, "amplifier": 0},
+        {"type": "play_sound", "sound": "minecraft:block.brewing_stand.brew"}
+      ],
+      "end": true
+    },
+    {
+      "id": "no_dive_repeat",
+      "type": "dialogue",
+      "text": "&6Still no Pokemon with Dive? You're a brave one!",
+      "end": true
+    }
+  ]
+}

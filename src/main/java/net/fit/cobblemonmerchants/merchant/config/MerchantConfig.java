@@ -23,7 +23,9 @@ public record MerchantConfig(
     List<TradeEntry> trades,
     Optional<BlackMarketConfigData> blackMarketConfig,
     Optional<DailyRewardConfig> dailyRewardConfig,
-    Optional<List<DailyRotatingTradeConfig>> dailyRotatingTrades
+    Optional<List<DailyRotatingTradeConfig>> dailyRotatingTrades,
+    Optional<String> actionId,
+    boolean actionBeforeTrade
 ) {
     public static final Codec<MerchantConfig> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
@@ -34,7 +36,9 @@ public record MerchantConfig(
             TradeEntry.CODEC.listOf().fieldOf("trades").forGetter(MerchantConfig::trades),
             BlackMarketConfigData.CODEC.optionalFieldOf("black_market_config").forGetter(MerchantConfig::blackMarketConfig),
             DailyRewardConfig.CODEC.optionalFieldOf("daily_reward").forGetter(MerchantConfig::dailyRewardConfig),
-            DailyRotatingTradeConfig.CODEC.listOf().optionalFieldOf("daily_rotating_trades").forGetter(MerchantConfig::dailyRotatingTrades)
+            DailyRotatingTradeConfig.CODEC.listOf().optionalFieldOf("daily_rotating_trades").forGetter(MerchantConfig::dailyRotatingTrades),
+            Codec.STRING.optionalFieldOf("action_id").forGetter(MerchantConfig::actionId),
+            Codec.BOOL.optionalFieldOf("action_before_trade", false).forGetter(MerchantConfig::actionBeforeTrade)
         ).apply(instance, MerchantConfig::new)
     );
 
