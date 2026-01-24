@@ -68,6 +68,10 @@ public class CobblemonMerchants {
 
     @SubscribeEvent
     public void onAddReloadListener(AddReloadListenerEvent event) {
+        // Register trade pool reload listener (must be before merchant config to be available)
+        event.addListener(net.fit.cobblemonmerchants.merchant.config.TradePoolRegistry.getInstance());
+        LOGGER.info("Registered trade pool reload listener");
+
         // Register merchant config reload listener
         event.addListener(net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getInstance());
         LOGGER.info("Registered merchant config reload listener");
@@ -105,8 +109,9 @@ public class CobblemonMerchants {
         net.fit.cobblemonmerchants.command.SpawnMerchantCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.RefreshBlackMarketCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.ResetDailyRewardsCommand.register(event.getDispatcher());
+        net.fit.cobblemonmerchants.command.DailyCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.ledger.LedgerCommand.register(event.getDispatcher());
-        LOGGER.info("Registered /spawnmerchant, /refreshblackmarket, /resetdailyrewards, and /ledger commands");
+        LOGGER.info("Registered /spawnmerchant, /refreshblackmarket, /resetdailyrewards, /daily, and /ledger commands");
     }
 
     @SubscribeEvent

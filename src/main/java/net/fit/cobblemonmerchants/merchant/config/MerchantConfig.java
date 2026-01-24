@@ -22,7 +22,8 @@ public record MerchantConfig(
     Optional<String> villagerProfession,
     List<TradeEntry> trades,
     Optional<BlackMarketConfigData> blackMarketConfig,
-    Optional<DailyRewardConfig> dailyRewardConfig
+    Optional<DailyRewardConfig> dailyRewardConfig,
+    Optional<List<DailyRotatingTradeConfig>> dailyRotatingTrades
 ) {
     public static final Codec<MerchantConfig> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
@@ -32,7 +33,8 @@ public record MerchantConfig(
             Codec.STRING.optionalFieldOf("villager_profession").forGetter(MerchantConfig::villagerProfession),
             TradeEntry.CODEC.listOf().fieldOf("trades").forGetter(MerchantConfig::trades),
             BlackMarketConfigData.CODEC.optionalFieldOf("black_market_config").forGetter(MerchantConfig::blackMarketConfig),
-            DailyRewardConfig.CODEC.optionalFieldOf("daily_reward").forGetter(MerchantConfig::dailyRewardConfig)
+            DailyRewardConfig.CODEC.optionalFieldOf("daily_reward").forGetter(MerchantConfig::dailyRewardConfig),
+            DailyRotatingTradeConfig.CODEC.listOf().optionalFieldOf("daily_rotating_trades").forGetter(MerchantConfig::dailyRotatingTrades)
         ).apply(instance, MerchantConfig::new)
     );
 

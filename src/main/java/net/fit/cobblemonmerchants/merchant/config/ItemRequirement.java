@@ -54,6 +54,30 @@ public class ItemRequirement {
     }
 
     /**
+     * Creates an ItemRequirement from an item ID string.
+     *
+     * @param itemId The item ID (e.g., "minecraft:diamond", "cobblemon:relic_coin")
+     * @param count The required count
+     * @return The ItemRequirement, or a barrier fallback if the item ID is invalid
+     */
+    public static ItemRequirement fromItemId(String itemId, int count) {
+        try {
+            ResourceLocation itemLoc = ResourceLocation.parse(itemId);
+            Item item = BuiltInRegistries.ITEM.get(itemLoc);
+            if (item == null || item == net.minecraft.world.item.Items.AIR) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "Unknown item ID '{}', using barrier as fallback", itemId);
+                return createBrokenItemRequirement(count, null);
+            }
+            return new ItemRequirement(new ItemStack(item, count), null, count, null, false);
+        } catch (Exception e) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                "Failed to parse item ID '{}': {}", itemId, e.getMessage());
+            return createBrokenItemRequirement(count, null);
+        }
+    }
+
+    /**
      * Creates a fallback ItemRequirement using a barrier item for broken/missing items.
      */
     private static ItemRequirement createBrokenItemRequirement(int count, String displayName) {

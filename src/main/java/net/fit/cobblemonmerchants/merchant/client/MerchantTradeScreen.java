@@ -3,7 +3,6 @@ package net.fit.cobblemonmerchants.merchant.client;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.fit.cobblemonmerchants.CobblemonMerchants;
 import net.fit.cobblemonmerchants.merchant.menu.MerchantTradeMenu;
-import net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager;
 import net.fit.cobblemonmerchants.network.ClaimDailyRewardPacket;
 import net.fit.cobblemonmerchants.network.TradeClickPacket;
 import net.minecraft.client.Minecraft;
@@ -70,12 +69,12 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
         // Update shimmer animation
         shimmerTick += partialTick;
 
-        // Update timer periodically for live countdown
+        // Update timer periodically for live countdown based on server time
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastTimerUpdate > TIMER_UPDATE_INTERVAL_MS) {
             lastTimerUpdate = currentTime;
-            // Update the time display from local calculation
-            menu.updateTimeUntilReset(DailyRewardManager.getFormattedTimeUntilReset());
+            // Update the time display based on elapsed time since menu opened (uses server time)
+            menu.updateTimeUntilResetFromElapsed();
         }
 
         // Render trade items

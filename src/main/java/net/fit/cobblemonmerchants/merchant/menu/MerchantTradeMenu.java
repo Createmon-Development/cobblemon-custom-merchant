@@ -35,6 +35,8 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     private int dailyRewardPosition = -1;
     private boolean dailyRewardClaimed = false;
     private String timeUntilReset = "";
+    private long initialResetMillis = 0; // Initial milliseconds until reset from server
+    private long menuOpenedTime = 0; // System time when menu was opened (for countdown)
     private int dailyRewardMinCount = 1;
     private int dailyRewardMaxCount = 1;
     private boolean dailyRewardSharedCooldown = true;
@@ -79,13 +81,15 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             this.dailyRewardItem = ItemStack.STREAM_CODEC.decode(registryBuf);
             this.dailyRewardPosition = extraData.readInt();
             this.dailyRewardClaimed = extraData.readBoolean();
-            this.timeUntilReset = extraData.readUtf();
+            this.initialResetMillis = extraData.readLong(); // Read milliseconds from server
+            this.menuOpenedTime = System.currentTimeMillis(); // Record when menu was opened
+            this.timeUntilReset = formatMillisToTime(this.initialResetMillis); // Format for display
             this.dailyRewardMinCount = extraData.readInt();
             this.dailyRewardMaxCount = extraData.readInt();
             this.dailyRewardSharedCooldown = extraData.readBoolean();
             this.merchantEntityUUID = extraData.readUUID();
-            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Daily reward at position {}, claimed: {}, reset in: {}, count: {}-{}, sharedCooldown: {}",
-                this.dailyRewardPosition, this.dailyRewardClaimed, this.timeUntilReset, this.dailyRewardMinCount, this.dailyRewardMaxCount, this.dailyRewardSharedCooldown);
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Daily reward at position {}, claimed: {}, reset in: {}ms ({}), count: {}-{}, sharedCooldown: {}",
+                this.dailyRewardPosition, this.dailyRewardClaimed, this.initialResetMillis, this.timeUntilReset, this.dailyRewardMinCount, this.dailyRewardMaxCount, this.dailyRewardSharedCooldown);
         }
 
         // Try to get the merchant from the world
@@ -245,10 +249,47 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     }
 
     /**
-     * Updates the time until reset string (for live updates)
+     * Updates the time until reset string based on elapsed time since menu opened.
+     * This ensures the countdown uses server time, not client time.
      */
-    public void updateTimeUntilReset(String time) {
-        this.timeUntilReset = time;
+    public void updateTimeUntilResetFromElapsed() {
+        if (initialResetMillis > 0 && menuOpenedTime > 0) {
+            long elapsed = System.currentTimeMillis() - menuOpenedTime;
+            long remaining = Math.max(0, initialResetMillis - elapsed);
+            this.timeUntilReset = formatMillisToTime(remaining);
+        }
+    }
+
+    /**
+     * Formats milliseconds into a human-readable time string (e.g., "5h 23m")
+     */
+    private static String formatMillisToTime(long millis) {
+        if (millis <= 0) {
+            return "0m";
+        }
+        long totalSeconds = millis / 1000;
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+
+        if (hours > 0) {
+            return hours + "h " + minutes + "m";
+        } else {
+            return minutes + "m";
+        }
+    }
+
+    /**
+     * Gets the initial reset milliseconds sent from server (for external use)
+     */
+    public long getInitialResetMillis() {
+        return initialResetMillis;
+    }
+
+    /**
+     * Gets the time when this menu was opened (for external use)
+     */
+    public long getMenuOpenedTime() {
+        return menuOpenedTime;
     }
 
     /**

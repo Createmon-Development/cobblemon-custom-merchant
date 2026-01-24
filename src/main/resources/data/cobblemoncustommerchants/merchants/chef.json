@@ -33,5 +33,12 @@
         "count": 12
       }
     }
+  ],
+  "daily_rotating_trades": [
+    {
+      "pool": "cobblemoncustommerchants:daily_special",
+      "slot_id": "chef_daily",
+      "position": 8
+    }
   ]
 }
