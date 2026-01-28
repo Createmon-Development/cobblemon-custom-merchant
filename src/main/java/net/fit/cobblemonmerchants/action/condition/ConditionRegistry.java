@@ -34,7 +34,17 @@ public class ConditionRegistry {
             CobblemonMerchants.LOGGER.warn("Unknown condition type: {}", data.type());
             return false;
         }
-        return condition.evaluate(data, player, merchant);
+        boolean result = condition.evaluate(data, player, merchant);
+
+        // Debug logging for condition evaluation
+        CobblemonMerchants.LOGGER.info("Condition '{}' evaluated to {} (item={}, component={}, value={}, variant={})",
+            data.type(), result,
+            data.item().orElse("none"),
+            data.component().orElse("none"),
+            data.getValue(),
+            data.variant().orElse("none"));
+
+        return result;
     }
 
     /**

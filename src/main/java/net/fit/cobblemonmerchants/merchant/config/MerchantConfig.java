@@ -7,9 +7,11 @@ import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Configuration for a merchant loaded from datapacks.
@@ -106,6 +108,43 @@ public record MerchantConfig(
     }
 
     /**
+     * Gets all available variant names for this merchant.
+     * Collects variants from trades (variant_overrides, variants),
+     * daily rewards, and daily rotating trades.
+     * Always includes "default".
+     */
+    public Set<String> getAvailableVariants() {
+        Set<String> available = new HashSet<>();
+        available.add("default");
+
+        // Collect from trade variant_overrides and variants
+        for (TradeEntry trade : trades) {
+            if (trade.variantOverrides().isPresent()) {
+                available.addAll(trade.variantOverrides().get().keySet());
+            }
+            if (trade.variants().isPresent()) {
+                available.addAll(trade.variants().get());
+            }
+        }
+
+        // Collect from daily reward variants
+        if (dailyRewardConfig.isPresent()) {
+            available.addAll(dailyRewardConfig.get().variants().keySet());
+        }
+
+        // Collect from daily rotating trades
+        if (dailyRotatingTrades.isPresent()) {
+            for (DailyRotatingTradeConfig rotatingTrade : dailyRotatingTrades.get()) {
+                if (rotatingTrade.variants().isPresent()) {
+                    available.addAll(rotatingTrade.variants().get());
+                }
+            }
+        }
+
+        return available;
+    }
+
+    /**
      * Represents overrides for a specific variant's trade values.
      * Any field not specified uses the base trade value.
      */
@@ -137,6 +176,8 @@ public record MerchantConfig(
      *                 If specified, trade only shows for merchants with matching variant.
      * @param outputCount The raw output count from JSON (not capped by ItemStack limits).
      *                    This allows trades with output counts > 64.
+     * @param slotId Optional slot ID for daily rotating trades. Used to track usage independently
+     *               of trade index so that refreshing daily rotating trades resets usage properly.
      */
     public record TradeEntry(
         ItemRequirement input,
@@ -150,7 +191,8 @@ public record MerchantConfig(
         Optional<Integer> position,
         Optional<Map<String, TradeVariantOverride>> variantOverrides,
         boolean dailyReset,
-        Optional<List<String>> variants
+        Optional<List<String>> variants,
+        Optional<String> slotId
     ) {
         /**
          * A lenient ItemStack codec that falls back to a barrier item if parsing fails.
@@ -199,12 +241,13 @@ public record MerchantConfig(
                 Codec.unboundedMap(Codec.STRING, TradeVariantOverride.CODEC)
                     .optionalFieldOf("variant_overrides").forGetter(TradeEntry::variantOverrides),
                 Codec.BOOL.optionalFieldOf("daily_reset", false).forGetter(TradeEntry::dailyReset),
-                Codec.STRING.listOf().optionalFieldOf("variants").forGetter(TradeEntry::variants)
+                Codec.STRING.listOf().optionalFieldOf("variants").forGetter(TradeEntry::variants),
+                Codec.STRING.optionalFieldOf("slot_id").forGetter(TradeEntry::slotId)
             ).apply(instance, (input, secondInput, outputWithCount, maxUses, villagerXp, priceMultiplier,
-                               tradeDisplayName, position, variantOverrides, dailyReset, variants) ->
+                               tradeDisplayName, position, variantOverrides, dailyReset, variants, slotId) ->
                 new TradeEntry(input, secondInput, outputWithCount.stack(), outputWithCount.count(),
                     maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
-                    variantOverrides, dailyReset, variants))
+                    variantOverrides, dailyReset, variants, slotId))
         );
 
         /**

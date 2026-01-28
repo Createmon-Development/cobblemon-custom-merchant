@@ -135,12 +135,20 @@ public class DailyRotatingTradeManager extends SavedData {
             return null;
         }
 
+        // Resolve the item ID (handles both specific items and tags)
+        String resolvedItemId = entry.getResolvedItemId(random);
+        if (resolvedItemId == null) {
+            CobblemonMerchants.LOGGER.warn("Failed to resolve item for pool entry '{}' in slot '{}'",
+                entry.getDisplayIdentifier(), slotId);
+            return null;
+        }
+
         // Apply variance using the same seed for consistency
         int effectiveInputAmount = entry.getEffectiveInputAmount(random);
         int effectiveOutputAmount = entry.getEffectiveOutputAmount(random);
 
         SelectedTrade selected = new SelectedTrade(
-            entry.itemId(),
+            resolvedItemId,
             effectiveInputAmount,
             effectiveOutputAmount,
             entry.getMaxUsesOrDefault(),
@@ -151,8 +159,10 @@ public class DailyRotatingTradeManager extends SavedData {
         selectedTrades.put(slotId, selected);
         setDirty();
 
-        CobblemonMerchants.LOGGER.info("Selected daily rotating trade for slot '{}': {} (input: {}, output: {})",
-            slotId, entry.itemId(), effectiveInputAmount, effectiveOutputAmount);
+        // Log with source info (tag vs specific item)
+        String sourceInfo = entry.isTag() ? " (from tag " + entry.tag().get() + ")" : "";
+        CobblemonMerchants.LOGGER.info("Selected daily rotating trade for slot '{}': {}{} (input: {}, output: {}, maxUses: {})",
+            slotId, resolvedItemId, sourceInfo, effectiveInputAmount, effectiveOutputAmount, entry.getMaxUsesOrDefault());
 
         return selected;
     }

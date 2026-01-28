@@ -16,6 +16,16 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
+        "count": 64
+      },
+      "output": {
+        "id": "berrypouch:berry_pouch_30",
+        "count": 1
+      }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
         "count": 300
       },
       "output": {
@@ -78,6 +88,17 @@
         "id": "cobblemonsizevariation:shrink_essence",
         "count": 1
       }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_teleport",
+        "count": 1
+      },
+      "position": 8
     }
   ]
 }

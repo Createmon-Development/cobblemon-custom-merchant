@@ -60,8 +60,36 @@ public class SpawnMerchantCommand {
         }, builder);
     };
 
-    private static final SuggestionProvider<CommandSourceStack> VARIANT_SUGGESTIONS = (context, builder) -> {
-        return SharedSuggestionProvider.suggest(new String[]{"default", "housed", "temple"}, builder);
+    /**
+     * Dynamic variant suggestions for merchants based on the selected merchant type.
+     */
+    private static final SuggestionProvider<CommandSourceStack> MERCHANT_VARIANT_SUGGESTIONS = (context, builder) -> {
+        try {
+            ResourceLocation typeId = ResourceLocationArgument.getId(context, "type");
+            MerchantConfig config = MerchantConfigRegistry.getConfig(typeId);
+            if (config != null) {
+                return SharedSuggestionProvider.suggest(config.getAvailableVariants(), builder);
+            }
+        } catch (Exception ignored) {
+            // Type argument may not be parsed yet
+        }
+        return SharedSuggestionProvider.suggest(new String[]{"default"}, builder);
+    };
+
+    /**
+     * Dynamic variant suggestions for NPCs based on the selected NPC type.
+     */
+    private static final SuggestionProvider<CommandSourceStack> NPC_VARIANT_SUGGESTIONS = (context, builder) -> {
+        try {
+            ResourceLocation typeId = ResourceLocationArgument.getId(context, "type");
+            NPCConfig config = NPCConfigRegistry.getConfig(typeId);
+            if (config != null) {
+                return SharedSuggestionProvider.suggest(config.getAvailableVariants(), builder);
+            }
+        } catch (Exception ignored) {
+            // Type argument may not be parsed yet
+        }
+        return SharedSuggestionProvider.suggest(new String[]{"default"}, builder);
     };
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -83,7 +111,7 @@ public class SpawnMerchantCommand {
                                     StringArgumentType.getString(ctx, "biome"),
                                     StringArgumentType.getString(ctx, "profession"), null))
                                 .then(Commands.argument("variant", StringArgumentType.word())
-                                    .suggests(VARIANT_SUGGESTIONS)
+                                    .suggests(MERCHANT_VARIANT_SUGGESTIONS)
                                     .executes(ctx -> spawnMerchantCmd(ctx,
                                         StringArgumentType.getString(ctx, "biome"),
                                         StringArgumentType.getString(ctx, "profession"),
@@ -108,7 +136,7 @@ public class SpawnMerchantCommand {
                                     StringArgumentType.getString(ctx, "biome"),
                                     StringArgumentType.getString(ctx, "profession"), null))
                                 .then(Commands.argument("variant", StringArgumentType.word())
-                                    .suggests(VARIANT_SUGGESTIONS)
+                                    .suggests(NPC_VARIANT_SUGGESTIONS)
                                     .executes(ctx -> spawnNPCCmd(ctx,
                                         StringArgumentType.getString(ctx, "biome"),
                                         StringArgumentType.getString(ctx, "profession"),
@@ -217,9 +245,9 @@ public class SpawnMerchantCommand {
 
         npc.setNPCId(npcTypeId);
 
-        if (variant != null && !variant.isEmpty()) {
-            npc.setNPCVariant(variant);
-        }
+        // Use specified variant, or fall back to config's default variant
+        String effectiveVariant = (variant != null && !variant.isEmpty()) ? variant : config.getDefaultVariant();
+        npc.setNPCVariant(effectiveVariant);
 
         String biome = overrideBiome != null ? overrideBiome : config.getBiome();
         npc.setVillagerBiome(biome);
@@ -232,8 +260,7 @@ public class SpawnMerchantCommand {
 
         level.addFreshEntity(npc);
 
-        String variantInfo = variant != null ? " (variant: " + variant + ")" : "";
-        source.sendSuccess(() -> Component.literal("Spawned NPC: " + config.displayName() + variantInfo), true);
+        source.sendSuccess(() -> Component.literal("Spawned NPC: " + config.displayName() + " (variant: " + effectiveVariant + ")"), true);
 
         return 1;
     }

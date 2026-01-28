@@ -54,6 +54,24 @@ public class ItemRequirement {
     }
 
     /**
+     * Creates a free trade marker ItemRequirement.
+     * This is used for daily rotating trades with trade_type="free".
+     * The marker is identified by having count = 0.
+     *
+     * @return An ItemRequirement with count 0 that signals a free trade
+     */
+    public static ItemRequirement createFreeTradeMarker() {
+        // Use structure_void as a placeholder - it's unobtainable by players
+        return new ItemRequirement(
+            new ItemStack(net.minecraft.world.item.Items.STRUCTURE_VOID, 1),
+            null,
+            0, // Count 0 marks this as a free trade
+            "Free",
+            false
+        );
+    }
+
+    /**
      * Creates an ItemRequirement from an item ID string.
      *
      * @param itemId The item ID (e.g., "minecraft:diamond", "cobblemon:relic_coin")

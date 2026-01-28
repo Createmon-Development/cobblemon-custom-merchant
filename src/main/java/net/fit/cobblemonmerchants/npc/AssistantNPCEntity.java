@@ -153,6 +153,17 @@ public class AssistantNPCEntity extends Villager {
 
     @Override
     public boolean hurt(DamageSource source, float amount) {
+        // Check if attacker is player with debug stick + sneaking = remove NPC
+        if (source.getEntity() instanceof net.minecraft.world.entity.player.Player player && player.isShiftKeyDown()) {
+            if (player.getMainHandItem().getItem() instanceof net.fit.cobblemonmerchants.item.custom.MerchantDebugStick) {
+                if (!this.level().isClientSide) {
+                    this.discard();
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("Removed NPC: " + getNPCDisplayName())
+                        .withStyle(net.minecraft.ChatFormatting.RED));
+                }
+                return true;
+            }
+        }
         return false;
     }
 
@@ -213,9 +224,8 @@ public class AssistantNPCEntity extends Villager {
 
         ResourceLocation actionId = ResourceLocation.parse(actionIdOpt.get());
 
-        // Execute the dialogue (pass null for merchant since this is an NPC, not a merchant)
-        // The ActionExecutor will use the NPC's name from the action config speaker field
-        ActionExecutor.executeDialogue(player, null, actionId, null);
+        // Execute the dialogue with this NPC's display name as the default speaker
+        ActionExecutor.executeDialogueForNPC(player, this, actionId, null);
     }
 
     // ========== Persistence ==========

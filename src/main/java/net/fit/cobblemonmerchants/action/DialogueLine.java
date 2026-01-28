@@ -28,7 +28,9 @@ public record DialogueLine(
     boolean end,
     boolean repeatable,
     Optional<List<BranchData>> branches,
-    Optional<String> defaultBranch
+    Optional<String> defaultBranch,
+    boolean entryPoint,
+    Optional<String> returnLine
 ) {
     public static final Codec<DialogueLine> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
@@ -43,9 +45,19 @@ public record DialogueLine(
             Codec.BOOL.optionalFieldOf("end", false).forGetter(DialogueLine::end),
             Codec.BOOL.optionalFieldOf("repeatable", false).forGetter(DialogueLine::repeatable),
             BranchData.CODEC.listOf().optionalFieldOf("branches").forGetter(DialogueLine::branches),
-            Codec.STRING.optionalFieldOf("default").forGetter(DialogueLine::defaultBranch)
+            Codec.STRING.optionalFieldOf("default").forGetter(DialogueLine::defaultBranch),
+            Codec.BOOL.optionalFieldOf("entry_point", true).forGetter(DialogueLine::entryPoint),
+            Codec.STRING.optionalFieldOf("return_line").forGetter(DialogueLine::returnLine)
         ).apply(instance, DialogueLine::new)
     );
+
+    /**
+     * Checks if this line can be selected as an initial entry point.
+     * Lines that are only reached via "next" should have entry_point: false.
+     */
+    public boolean canBeEntryPoint() {
+        return entryPoint;
+    }
 
     /**
      * Checks if all conditions for this dialogue line are met.

@@ -5,21 +5,23 @@
       "id": "step4_glowing_tablet",
       "type": "dialogue",
       "speaker": "Treasure Hunter",
-      "text": "&6That's so much better! I see, this is the translation cipher for the archaic script, it matches up perfectly with my parchment.",
+      "text": "That's so much better! I see, this is the translation cipher for the archaic script, it matches up perfectly with my parchment.",
       "conditions": [
         {"type": "merchant_variant", "variant": "housed"},
-        {"type": "holding_item_state", "item": "skyscobblemonitems:ancient_tablet", "component": "tablet_glowing", "bool_value": true}
+        {"type": "holding_item_state", "item": "skyscobblemonitems:runic_cipher_tablet", "component": "tablet_glowing", "bool_value": true}
       ],
       "priority": 200,
       "repeatable": false,
+      "return_line": "step4_done",
       "next": "step4_give_parchment"
     },
     {
       "id": "step4_give_parchment",
       "type": "dialogue",
-      "text": "&6Here, take the old parchment, it may help you figure out the secrets of your orb.",
+      "text": "Here, take the old parchment, it may help you figure out the secrets of your orb.",
+      "entry_point": false,
       "actions": [
-        {"type": "give_item", "item": "skyscobblemonitems:ancient_parchment", "count": 1},
+        {"type": "give_item", "item": "skyscobblemonitems:mysterious_parchment", "count": 1},
         {"type": "play_sound", "sound": "minecraft:entity.player.levelup"}
       ],
       "next": "step4_done"
@@ -27,7 +29,9 @@
     {
       "id": "step4_done",
       "type": "dialogue",
-      "text": "&6I've done all I can to help you, the rest is up to you &c<3&6.",
+      "speaker": "Treasure Hunter",
+      "text": "I've done all I can to help you, the rest is up to you <3.",
+      "entry_point": false,
       "repeatable": true,
       "end": true
     },
@@ -35,25 +39,12 @@
       "id": "step4_tablet_not_glowing",
       "type": "dialogue",
       "speaker": "Treasure Hunter",
-      "text": "&6Hmmmm, I can't quite make out the figures. Try to find a way to brighten up the text.",
+      "text": "Hmmmm, I can't quite make out the figures. Try to find a way to brighten up the text.",
       "conditions": [
         {"type": "merchant_variant", "variant": "housed"},
-        {"type": "holding_item", "item": "skyscobblemonitems:ancient_tablet"}
+        {"type": "holding_item_state", "item": "skyscobblemonitems:runic_cipher_tablet", "component": "tablet_glowing", "bool_value": false}
       ],
       "priority": 190,
-      "repeatable": true,
-      "end": true
-    },
-    {
-      "id": "step4_ask_tablet",
-      "type": "dialogue",
-      "speaker": "Treasure Hunter",
-      "text": "&6Welcome back! Now let's take a look at that tablet. Please show it to me.",
-      "conditions": [
-        {"type": "merchant_variant", "variant": "housed"},
-        {"type": "has_item", "item": "skyscobblemonitems:ancient_tablet"}
-      ],
-      "priority": 180,
       "repeatable": true,
       "end": true
     },
@@ -61,45 +52,78 @@
       "id": "step3_orb_not_housed",
       "type": "dialogue",
       "speaker": "Treasure Hunter",
-      "text": "&6Oh! That orb. I've seen that script somewhere before.",
+      "text": "Oh! That orb. I've seen that script somewhere before.",
       "conditions": [
         {"type": "merchant_variant", "variant": "default"},
-        {"type": "has_item_state", "item": "skyscobblemonitems:mysterious_orb", "component": "orb_state", "int_value": 3}
+        {"type": "holding_item_state", "item": "skyscobblemonitems:mysterious_orb", "component": "orb_state", "value": 3}
       ],
       "priority": 100,
       "repeatable": false,
+      "return_line": "step3_need_facilities",
       "next": "step3_need_facilities"
     },
     {
       "id": "step3_need_facilities",
       "type": "dialogue",
-      "text": "&6If I had the proper facilities I could search my archives for it.",
+      "speaker": "Treasure Hunter",
+      "text": "If I had the proper facilities I could search my archives for it.",
+      "entry_point": false,
       "repeatable": true,
-      "actions": [
-        {"type": "atmospheric", "text": "The Treasure Hunter looks around at his sparse surroundings..."}
-      ],
       "end": true
     },
     {
       "id": "step3_orb_housed",
       "type": "dialogue",
       "speaker": "Treasure Hunter",
-      "text": "&6Oh! That orb. I've seen that script somewhere before.",
+      "text": "Oh! That orb. I've seen that script somewhere before.",
       "conditions": [
         {"type": "merchant_variant", "variant": "housed"},
-        {"type": "has_item_state", "item": "skyscobblemonitems:mysterious_orb", "component": "orb_state", "int_value": 3}
+        {"type": "holding_item_state", "item": "skyscobblemonitems:mysterious_orb", "component": "orb_state", "value": 3}
       ],
       "priority": 100,
       "repeatable": false,
+      "return_line": "step3_orb_return",
       "next": "step3_found_parchment"
+    },
+    {
+      "id": "step3_orb_return",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "I see you still carry the mysterious orb. Have you found the temple yet? The map should guide you to the ancient secrets within.",
+      "entry_point": false,
+      "repeatable": true,
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "teleport"}],
+          "next": "step3_orb_return_teleport"
+        }
+      ],
+      "default": "step3_orb_return_no_teleport"
+    },
+    {
+      "id": "step3_orb_return_no_teleport",
+      "type": "dialogue",
+      "text": "Safe travels on your journey to the temple!",
+      "entry_point": false,
+      "repeatable": true,
+      "end": true
+    },
+    {
+      "id": "step3_orb_return_teleport",
+      "type": "dialogue",
+      "text": "Your Pokemon with Teleport can help you reach the temple quickly!",
+      "entry_point": false,
+      "repeatable": true,
+      "actions": [
+        {"type": "teleport_option", "text": "[Teleport to Temple]", "hover_text": "Click to teleport to the Temple", "destination": {"x": 3119, "y": 63, "z": 6339, "dimension": "minecraft:overworld"}}
+      ],
+      "end": true
     },
     {
       "id": "step3_found_parchment",
       "type": "dialogue",
-      "text": "&6Ahh, here it is. An old parchment with the same script. It was donated to me by a trainer exploring in the oceans to the far North East.",
-      "actions": [
-        {"type": "atmospheric", "text": "The Treasure Hunter pulls out a weathered parchment from his archives..."}
-      ],
+      "text": "Ahh, here it is. An old parchment with the same script. It was donated to me by a trainer exploring in the oceans to the far South East of spawn.",
+      "entry_point": false,
       "branches": [
         {
           "conditions": [{"type": "has_pokemon_move", "move": "dive"}],
@@ -111,22 +135,25 @@
     {
       "id": "step3_no_dive",
       "type": "dialogue",
-      "text": "&6At the moment I don't think you could enter the temple. You'd need a Pokemon that could help you enter.",
+      "text": "At the moment I don't think you could enter the temple. You'd need a Pokemon that could help you enter.",
+      "entry_point": false,
       "repeatable": true,
       "end": true
     },
     {
       "id": "step3_has_dive",
       "type": "dialogue",
-      "text": "&6Wonderful, your &b<pokemon_name> &6can help you enter the temple!",
+      "text": "Wonderful! You brought a pokemon with Dive with you. With their help you can enter the temple!",
+      "entry_point": false,
       "next": "step3_give_map"
     },
     {
       "id": "step3_give_map",
       "type": "dialogue",
-      "text": "&6Here, take this map to the temple near where the parchment was found, you may be able to find a way to decipher them. I'll send my assistant to the temple to meet you there.",
+      "text": "Here, take this map to the temple near where the parchment was found, you may be able to find a way to decipher them. I'll send my assistant to the temple to meet you there.",
+      "entry_point": false,
       "actions": [
-        {"type": "give_item", "item": "minecraft:filled_map", "count": 1},
+        {"type": "give_item", "item": "skyscobblemonitems:temple_treasure_map", "count": 1},
         {"type": "play_sound", "sound": "minecraft:entity.villager.yes"}
       ],
       "branches": [
@@ -140,20 +167,19 @@
     {
       "id": "step3_no_teleport",
       "type": "dialogue",
-      "text": "&6It's quite the journey, maybe a Pokemon could help you get there faster.",
+      "text": "It's quite the journey, maybe a Pokemon could help you get there faster.",
+      "entry_point": false,
       "repeatable": true,
-      "actions": [
-        {"type": "teleport_option", "text": "&9[Teleport to Temple]", "hover_text": "Click to teleport to the Crystal Temple", "destination": {"x": 3200, "y": 97, "z": 6480, "dimension": "minecraft:overworld"}}
-      ],
       "end": true
     },
     {
       "id": "step3_has_teleport",
       "type": "dialogue",
-      "text": "&6It's quite the journey, lucky for you your &b<pokemon_name> &6can teleport you right there!",
+      "text": "It's quite the journey, lucky for you one of your pokemon can Teleport you there!",
+      "entry_point": false,
       "repeatable": true,
       "actions": [
-        {"type": "teleport_option", "text": "&9[Teleport to Temple]", "hover_text": "Click to teleport to the Crystal Temple", "destination": {"x": 3200, "y": 97, "z": 6480, "dimension": "minecraft:overworld"}}
+        {"type": "teleport_option", "text": "[Teleport to Temple]", "hover_text": "Click to teleport to the Temple", "destination": {"x": 3119, "y": 63, "z": 6339, "dimension": "minecraft:overworld"}}
       ],
       "end": true
     },
@@ -161,7 +187,7 @@
       "id": "default_greeting",
       "type": "dialogue",
       "speaker": "Treasure Hunter",
-      "text": "&6Greetings, adventurer! I collect rare artifacts and treasures. What do you have to offer?",
+      "text": "Greetings, adventurer! I collect rare artifacts and treasures. What do you have to offer?",
       "priority": 0,
       "repeatable": true,
       "end": true

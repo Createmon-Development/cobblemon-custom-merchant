@@ -21,17 +21,17 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 25
+        "count": 18
       },
       "output": {
         "id": "cobblemonpokeboxes:greatball_pokebox",
         "count": 1
       },
-      "max_uses": 5,
+      "max_uses": 3,
       "daily_reset": true,
       "variant_overrides": {
         "housed": {
-          "input_count": 20
+          "input_count": 16
         }
       }
     },
@@ -93,7 +93,7 @@
     {
       "input": {
         "id": "skyscobblemonitems:event_ticket_purple",
-        "count": 5
+        "count": 4
       },
       "output": {
         "id": "mega_showdown:mega_stone",
@@ -104,7 +104,7 @@
     {
       "input": {
         "id": "skyscobblemonitems:event_ticket_purple",
-        "count": 5
+        "count": 8
       },
       "output": {
         "id": "cobblemon:ability_patch",
@@ -126,13 +126,24 @@
     {
       "input": {
         "id": "skyscobblemonitems:event_ticket_purple",
-        "count": 2
+        "count": 1
       },
       "output": {
         "id": "cobblemon_utility:woodencap",
         "count": 1
       },
       "position": 17
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_metronome",
+        "count": 1
+      },
+      "position": 8
     }
   ],
   "daily_reward": {

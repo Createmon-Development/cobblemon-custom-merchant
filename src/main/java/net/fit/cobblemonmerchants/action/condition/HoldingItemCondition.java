@@ -18,20 +18,52 @@ public class HoldingItemCondition implements Condition {
     @Override
     public boolean evaluate(ConditionData data, Player player, @Nullable CustomMerchantEntity merchant) {
         ItemStack heldItem = player.getMainHandItem();
+        ResourceLocation heldItemId = BuiltInRegistries.ITEM.getKey(heldItem.getItem());
+
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "[HoldingItemCondition] Player {} holding: {} (empty={})",
+            player.getName().getString(), heldItemId, heldItem.isEmpty());
+
+        // If player is holding nothing (air), they can't be holding a specific item
+        if (heldItem.isEmpty()) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "[HoldingItemCondition] Player has empty hand, returning invert={}", data.invert());
+            return data.invert();
+        }
 
         if (data.item().isPresent()) {
             ResourceLocation itemId = ResourceLocation.parse(data.item().get());
+
+            // Check if the item exists in the registry
+            if (!BuiltInRegistries.ITEM.containsKey(itemId)) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "[HoldingItemCondition] Item '{}' not found in registry", itemId);
+                return data.invert();
+            }
+
             Item item = BuiltInRegistries.ITEM.get(itemId);
             boolean result = heldItem.is(item);
+
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "[HoldingItemCondition] Checking for item '{}': match={}, invert={}, finalResult={}",
+                itemId, result, data.invert(), data.invert() ? !result : result);
+
             return data.invert() ? !result : result;
         }
 
         if (data.tag().isPresent()) {
             TagKey<Item> tag = TagKey.create(Registries.ITEM, ResourceLocation.parse(data.tag().get()));
             boolean result = heldItem.is(tag);
+
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "[HoldingItemCondition] Checking for tag '{}': match={}, invert={}, finalResult={}",
+                data.tag().get(), result, data.invert(), data.invert() ? !result : result);
+
             return data.invert() ? !result : result;
         }
 
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+            "[HoldingItemCondition] No item or tag specified in condition data");
         return false;
     }
 }

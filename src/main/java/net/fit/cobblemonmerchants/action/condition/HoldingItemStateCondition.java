@@ -19,14 +19,33 @@ public class HoldingItemStateCondition implements Condition {
     @Override
     public boolean evaluate(ConditionData data, Player player, @Nullable CustomMerchantEntity merchant) {
         if (data.item().isEmpty() || data.component().isEmpty()) {
+            CobblemonMerchants.LOGGER.info("[HoldingItemState] Missing item or component in condition data");
             return false;
         }
 
         ItemStack heldItem = player.getMainHandItem();
+
+        // If player is holding nothing (air), they can't be holding a specific item
+        if (heldItem.isEmpty()) {
+            CobblemonMerchants.LOGGER.info("[HoldingItemState] Player has empty hand, returning invert={}", data.invert());
+            return data.invert();
+        }
+
         ResourceLocation itemId = ResourceLocation.parse(data.item().get());
+
+        // Check if the item exists in the registry
+        if (!BuiltInRegistries.ITEM.containsKey(itemId)) {
+            CobblemonMerchants.LOGGER.warn("[HoldingItemState] Item '{}' not found in registry", itemId);
+            return data.invert();
+        }
+
         Item targetItem = BuiltInRegistries.ITEM.get(itemId);
 
+        CobblemonMerchants.LOGGER.info("[HoldingItemState] Checking: target={}, held={}, isEmpty={}",
+            itemId, BuiltInRegistries.ITEM.getKey(heldItem.getItem()), heldItem.isEmpty());
+
         if (!heldItem.is(targetItem)) {
+            CobblemonMerchants.LOGGER.info("[HoldingItemState] Item mismatch - not holding target item");
             return data.invert();
         }
 
@@ -34,7 +53,11 @@ public class HoldingItemStateCondition implements Condition {
         Object expectedValue = data.getValue();
         Object actualValue = getComponentValue(heldItem, componentName);
 
+        CobblemonMerchants.LOGGER.info("[HoldingItemState] Component '{}': expected={}, actual={}",
+            componentName, expectedValue, actualValue);
+
         boolean result = actualValue != null && valuesMatch(actualValue, expectedValue);
+        CobblemonMerchants.LOGGER.info("[HoldingItemState] Final result: {}", result);
         return data.invert() ? !result : result;
     }
 

@@ -27,14 +27,42 @@ public class DialogueEffect implements ActionEffect {
             return "???";
         });
 
-        // Format: [Speaker Name] message
+        // Strip color codes from the text - dialogue text is always white
+        String cleanText = stripColorCodes(text);
+
+        // Format: [Speaker Name] message (light yellow name, white text)
         MutableComponent message = Component.literal("[")
             .withStyle(style -> style.withColor(0xAAAAAA))
-            .append(Component.literal(speaker).withStyle(style -> style.withColor(0xFFAA00)))
+            .append(Component.literal(speaker).withStyle(style -> style.withColor(0xFFFF55))) // Light yellow
             .append(Component.literal("] ").withStyle(style -> style.withColor(0xAAAAAA)))
-            .append(parseColorCodes(text));
+            .append(Component.literal(cleanText).withStyle(style -> style.withColor(0xFFFFFF))); // White
 
         player.sendSystemMessage(message);
+    }
+
+    /**
+     * Strips Minecraft color codes (& format) from text.
+     */
+    private static String stripColorCodes(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '&' && i + 1 < text.length()) {
+                char code = Character.toLowerCase(text.charAt(i + 1));
+                // Check if it's a valid color/format code
+                if ((code >= '0' && code <= '9') || (code >= 'a' && code <= 'f') ||
+                    code == 'l' || code == 'o' || code == 'n' || code == 'm' || code == 'r') {
+                    i++; // Skip the code
+                    continue;
+                }
+            }
+            result.append(c);
+        }
+        return result.toString();
     }
 
     /**

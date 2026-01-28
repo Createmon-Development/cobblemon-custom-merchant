@@ -32,6 +32,17 @@
         "id": "cobblemon:revive",
         "count": 1
       }
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_present",
+        "count": 1
+      },
+      "position": 8
     }
   ]
 }

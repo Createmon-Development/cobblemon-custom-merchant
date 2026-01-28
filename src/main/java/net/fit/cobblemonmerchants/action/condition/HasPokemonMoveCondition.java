@@ -17,15 +17,27 @@ public class HasPokemonMoveCondition implements Condition {
     @Override
     public boolean evaluate(ConditionData data, Player player, @Nullable CustomMerchantEntity merchant) {
         if (data.move().isEmpty()) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                "[HasPokemonMoveCondition] No move specified in condition data");
             return data.invert();
         }
 
         if (!(player instanceof ServerPlayer serverPlayer)) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                "[HasPokemonMoveCondition] Player is not ServerPlayer: {}", player.getClass().getName());
             return data.invert();
         }
 
         String moveName = data.move().get();
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "[HasPokemonMoveCondition] Checking if player {} has Pokemon with move '{}'",
+            player.getName().getString(), moveName);
+
         boolean hasMove = CobblemonPartyHelper.hasPartyPokemonWithMove(serverPlayer, moveName);
+
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "[HasPokemonMoveCondition] Result for move '{}': hasMove={}, invert={}, finalResult={}",
+            moveName, hasMove, data.invert(), data.invert() ? !hasMove : hasMove);
 
         return data.invert() ? !hasMove : hasMove;
     }

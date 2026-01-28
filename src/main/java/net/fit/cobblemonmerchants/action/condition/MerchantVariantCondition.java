@@ -13,6 +13,9 @@ public class MerchantVariantCondition implements Condition {
     @Override
     public boolean evaluate(ConditionData data, Player player, @Nullable CustomMerchantEntity merchant) {
         if (merchant == null || data.variant().isEmpty()) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "[MerchantVariantCondition] No merchant or variant specified, returning invert={}",
+                data.invert());
             return data.invert();
         }
 
@@ -20,6 +23,11 @@ public class MerchantVariantCondition implements Condition {
         String actualVariant = merchant.getMerchantVariant();
 
         boolean result = expectedVariant.equals(actualVariant);
+
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "[MerchantVariantCondition] Expected='{}', actual='{}', match={}, invert={}, finalResult={}",
+            expectedVariant, actualVariant, result, data.invert(), data.invert() ? !result : result);
+
         return data.invert() ? !result : result;
     }
 }
