@@ -249,14 +249,16 @@ public class SpawnMerchantCommand {
         String effectiveVariant = (variant != null && !variant.isEmpty()) ? variant : config.getDefaultVariant();
         npc.setNPCVariant(effectiveVariant);
 
-        String biome = overrideBiome != null ? overrideBiome : config.getBiome();
-        npc.setVillagerBiome(biome);
+        // Load config to set display name and appearance (can be overridden below)
+        npc.loadFromConfig();
 
-        String profession = overrideProfession != null ? overrideProfession : config.getProfession();
-        npc.setVillagerProfession(profession);
-
-        npc.setCustomName(Component.literal(config.displayName()));
-        npc.setCustomNameVisible(true);
+        // Apply overrides if specified
+        if (overrideBiome != null) {
+            npc.setVillagerBiome(overrideBiome);
+        }
+        if (overrideProfession != null) {
+            npc.setVillagerProfession(overrideProfession);
+        }
 
         level.addFreshEntity(npc);
 

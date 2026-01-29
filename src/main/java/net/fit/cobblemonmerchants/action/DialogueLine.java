@@ -30,11 +30,22 @@ public record DialogueLine(
     Optional<List<BranchData>> branches,
     Optional<String> defaultBranch,
     boolean entryPoint,
-    Optional<String> returnLine
+    Optional<String> returnLine,
+    Optional<String> comment
 ) {
+    // Constructor that ignores comment field (for backwards compatibility)
+    public DialogueLine(String id, String type, Optional<String> speaker, Optional<String> text,
+                        List<ConditionData> conditions, int priority, List<ActionEffectData> actions,
+                        Optional<String> next, boolean end, boolean repeatable,
+                        Optional<List<BranchData>> branches, Optional<String> defaultBranch,
+                        boolean entryPoint, Optional<String> returnLine) {
+        this(id, type, speaker, text, conditions, priority, actions, next, end, repeatable,
+             branches, defaultBranch, entryPoint, returnLine, Optional.empty());
+    }
+
     public static final Codec<DialogueLine> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
-            Codec.STRING.fieldOf("id").forGetter(DialogueLine::id),
+            Codec.STRING.optionalFieldOf("id", "__comment__").forGetter(DialogueLine::id),
             Codec.STRING.optionalFieldOf("type", "dialogue").forGetter(DialogueLine::type),
             Codec.STRING.optionalFieldOf("speaker").forGetter(DialogueLine::speaker),
             Codec.STRING.optionalFieldOf("text").forGetter(DialogueLine::text),
@@ -47,16 +58,25 @@ public record DialogueLine(
             BranchData.CODEC.listOf().optionalFieldOf("branches").forGetter(DialogueLine::branches),
             Codec.STRING.optionalFieldOf("default").forGetter(DialogueLine::defaultBranch),
             Codec.BOOL.optionalFieldOf("entry_point", true).forGetter(DialogueLine::entryPoint),
-            Codec.STRING.optionalFieldOf("return_line").forGetter(DialogueLine::returnLine)
+            Codec.STRING.optionalFieldOf("return_line").forGetter(DialogueLine::returnLine),
+            Codec.STRING.optionalFieldOf("_comment").forGetter(DialogueLine::comment)
         ).apply(instance, DialogueLine::new)
     );
 
     /**
+     * Returns true if this is a comment-only entry (not a real dialogue line).
+     */
+    public boolean isComment() {
+        return "__comment__".equals(id);
+    }
+
+    /**
      * Checks if this line can be selected as an initial entry point.
      * Lines that are only reached via "next" should have entry_point: false.
+     * Comment-only entries are never entry points.
      */
     public boolean canBeEntryPoint() {
-        return entryPoint;
+        return entryPoint && !isComment();
     }
 
     /**

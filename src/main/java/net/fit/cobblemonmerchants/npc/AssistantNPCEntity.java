@@ -35,10 +35,13 @@ public class AssistantNPCEntity extends Villager {
     private static final String TAG_VARIANT = "Variant";
     private static final String TAG_VILLAGER_BIOME = "VillagerBiome";
     private static final String TAG_VILLAGER_PROFESSION = "VillagerProfession";
+    private static final String TAG_DISPLAY_NAME = "DisplayName";
 
     private static final EntityDataAccessor<String> DATA_NPC_ID =
         SynchedEntityData.defineId(AssistantNPCEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> DATA_VARIANT =
+        SynchedEntityData.defineId(AssistantNPCEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> DATA_DISPLAY_NAME =
         SynchedEntityData.defineId(AssistantNPCEntity.class, EntityDataSerializers.STRING);
 
     private ResourceLocation npcId;
@@ -53,6 +56,7 @@ public class AssistantNPCEntity extends Villager {
         super.defineSynchedData(builder);
         builder.define(DATA_NPC_ID, "");
         builder.define(DATA_VARIANT, "default");
+        builder.define(DATA_DISPLAY_NAME, "NPC");
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -107,7 +111,9 @@ public class AssistantNPCEntity extends Villager {
 
     @Override
     public @NotNull Component getDisplayName() {
-        return Component.literal(getNPCDisplayName());
+        // Use synched data so clients can see the correct name
+        String displayName = this.entityData.get(DATA_DISPLAY_NAME);
+        return Component.literal(displayName != null && !displayName.isEmpty() ? displayName : "NPC");
     }
 
     public void setVillagerBiome(String biome) {
@@ -238,6 +244,7 @@ public class AssistantNPCEntity extends Villager {
             tag.putString(TAG_NPC_ID, this.npcId.toString());
         }
         tag.putString(TAG_VARIANT, this.variant);
+        tag.putString(TAG_DISPLAY_NAME, this.entityData.get(DATA_DISPLAY_NAME));
 
         // Save villager appearance
         VillagerData data = getVillagerData();
@@ -263,6 +270,11 @@ public class AssistantNPCEntity extends Villager {
         if (tag.contains(TAG_VARIANT)) {
             this.variant = tag.getString(TAG_VARIANT);
             this.entityData.set(DATA_VARIANT, this.variant);
+        }
+
+        // Restore display name (synched to client for name tag rendering)
+        if (tag.contains(TAG_DISPLAY_NAME)) {
+            this.entityData.set(DATA_DISPLAY_NAME, tag.getString(TAG_DISPLAY_NAME));
         }
 
         // Restore villager appearance
@@ -292,8 +304,12 @@ public class AssistantNPCEntity extends Villager {
         setVillagerBiome(config.getBiome());
         setVillagerProfession(config.getProfession());
 
-        // Set custom name
-        this.setCustomName(Component.literal(config.displayName()));
+        // Set synched display name (works on both client and server)
+        String displayName = getNPCDisplayName();
+        this.entityData.set(DATA_DISPLAY_NAME, displayName);
+
+        // Also set custom name for consistency
+        this.setCustomName(Component.literal(displayName));
         this.setCustomNameVisible(true);
 
         CobblemonMerchants.LOGGER.debug("Loaded NPC config for {}", this.npcId);
