@@ -1,0 +1,128 @@
+{
+  "description": "Treasure Hunter's Assistant dialogue at the temple for Crystal Ascendancy quest",
+  "dialogue_lines": [
+
+    {"_comment": "========== FIRST VISIT: Player arrives at temple =========="},
+
+    {
+      "id": "greeting",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "You made it! Long trek eh?",
+      "priority": 50,
+      "repeatable": false,
+      "entry_point": true,
+      "return_line": "return_router",
+      "next": "spawn_warning"
+    },
+    {
+      "id": "spawn_warning",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "That temple is messy business, you may want to set your spawn somewhere in case you end up sleeping with the fishes. Hehe.",
+      "entry_point": false,
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "dive"}],
+          "next": "has_dive"
+        }
+      ],
+      "default": "no_dive"
+    },
+    {
+      "id": "no_dive",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "Came all this way and didn't bring a pokemon to help you enter the temple? Eh, to each their own. Good luck I guess!",
+      "entry_point": false,
+      "repeatable": true,
+      "end": true
+    },
+    {
+      "id": "has_dive",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "Thanks to your pokemon breathing should be much easier in there. Try not to die in there!",
+      "entry_point": false,
+      "repeatable": true,
+      "actions": [
+        {"type": "apply_effect", "effect": "minecraft:water_breathing", "duration": 36000, "amplifier": 0},
+        {"type": "play_sound", "sound": "minecraft:entity.player.levelup"}
+      ],
+      "end": true
+    },
+
+    {"_comment": "========== RETURN VISIT: Player comes back (no tablet yet) =========="},
+
+    {
+      "id": "return_router",
+      "type": "dialogue",
+      "text": "",
+      "entry_point": false,
+      "branches": [
+        {
+          "conditions": [{"type": "has_item", "item": "skyscobblemonitems:runic_cipher_tablet"}],
+          "next": "return_home_prompt"
+        },
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "dive"}],
+          "next": "has_dive"
+        }
+      ],
+      "default": "no_dive"
+    },
+
+    {"_comment": "========== PLAYER HAS TABLET: First time celebration =========="},
+
+    {
+      "id": "has_tablet_celebrate",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "You actually did it! I had no faith in you at all!",
+      "conditions": [
+        {"type": "has_item", "item": "skyscobblemonitems:runic_cipher_tablet"}
+      ],
+      "priority": 100,
+      "repeatable": false,
+      "next": "return_home_prompt"
+    },
+
+    {"_comment": "========== SEND PLAYER HOME =========="},
+
+    {
+      "id": "return_home_prompt",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "It's time for you to return home. Bring this tablet to the Treasure Hunter in his studies.",
+      "entry_point": false,
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "teleport"}],
+          "next": "return_has_teleport"
+        }
+      ],
+      "default": "return_no_teleport"
+    },
+    {
+      "id": "return_has_teleport",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter's Assistant",
+      "text": "Lovely, you brought a pokemon with Teleport with you. They'll help you get home in a jiffy!",
+      "entry_point": false,
+      "repeatable": true,
+      "actions": [
+        {"type": "teleport_option", "text": "[Teleport to Spawn]", "hover_text": "Click to teleport back to the Spawn", "destination": {"x": 22 , "y": 158 , "z": -9, "dimension": "minecraft:overworld"}}
+      ],
+      "end": true
+    },
+    {
+    "id": "return_no_teleport",
+    "type": "dialogue",
+    "speaker": "Treasure Hunter's Assistant",
+    "text": "It's a long journey back. Good luck, trainer!",
+    "entry_point": false,
+    "repeatable": true,
+    "end": true
+    }
+  ]
+}

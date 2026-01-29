@@ -40,10 +40,18 @@ public class DailyTradeResetManager extends SavedData {
     }
 
     /**
-     * Creates a unique key for tracking trade usage.
+     * Creates a unique key for tracking trade usage by trade index.
      */
     private static String createKey(UUID playerUUID, String merchantId, int tradeIndex) {
         return playerUUID.toString() + ":" + merchantId + ":" + tradeIndex;
+    }
+
+    /**
+     * Creates a unique key for tracking trade usage by slot ID.
+     * Slot-based keys are prefixed with "slot:" to distinguish from index-based keys.
+     */
+    private static String createSlotKey(UUID playerUUID, String slotId) {
+        return playerUUID.toString() + ":slot:" + slotId;
     }
 
     /**
@@ -109,6 +117,200 @@ public class DailyTradeResetManager extends SavedData {
             playerUUID, merchantId, tradeIndex, usageRecords.get(key).usesToday);
     }
 
+    // ===== Slot-based tracking methods for daily rotating trades =====
+
+    /**
+     * Get the number of times a player has used a specific slot today.
+     * This is used for daily rotating trades that are tracked by slot_id.
+     */
+    public int getUsesTodayBySlot(UUID playerUUID, String slotId) {
+        String key = createSlotKey(playerUUID, slotId);
+        TradeUsageRecord record = usageRecords.get(key);
+
+        if (record == null) {
+            return 0;
+        }
+
+        long todayEpochDay = LocalDate.now(ZoneId.systemDefault()).toEpochDay();
+        if (record.lastUseDay != todayEpochDay) {
+            return 0;
+        }
+
+        return record.usesToday;
+    }
+
+    /**
+     * Check if a player can still use a slot-based trade.
+     */
+    public boolean canUseSlotTrade(UUID playerUUID, String slotId, int maxUses) {
+        int usesToday = getUsesTodayBySlot(playerUUID, slotId);
+        return usesToday < maxUses;
+    }
+
+    /**
+     * Record that a player has used a slot-based trade.
+     */
+    public void recordSlotTradeUse(UUID playerUUID, String slotId) {
+        String key = createSlotKey(playerUUID, slotId);
+        long todayEpochDay = LocalDate.now(ZoneId.systemDefault()).toEpochDay();
+
+        TradeUsageRecord record = usageRecords.get(key);
+        if (record == null || record.lastUseDay != todayEpochDay) {
+            usageRecords.put(key, new TradeUsageRecord(todayEpochDay, 1));
+        } else {
+            usageRecords.put(key, new TradeUsageRecord(todayEpochDay, record.usesToday + 1));
+        }
+        setDirty();
+
+        CobblemonMerchants.LOGGER.debug("Slot trade use recorded: player={}, slotId={}, uses today={}",
+            playerUUID, slotId, usageRecords.get(key).usesToday);
+    }
+
+    /**
+     * Clear usage records for specific slot IDs.
+     * Called when daily rotating trades are refreshed to reset usage.
+     */
+    public void clearSlotUsage(java.util.List<String> slotIds) {
+        int clearedCount = 0;
+        for (String slotId : slotIds) {
+            // Remove all entries that match the slot ID pattern
+            String slotSuffix = ":slot:" + slotId;
+            var iterator = usageRecords.entrySet().iterator();
+            while (iterator.hasNext()) {
+                if (iterator.next().getKey().endsWith(slotSuffix)) {
+                    iterator.remove();
+                    clearedCount++;
+                }
+            }
+        }
+        if (clearedCount > 0) {
+            setDirty();
+            CobblemonMerchants.LOGGER.info("Cleared {} slot usage records for slots: {}", clearedCount, slotIds);
+        }
+    }
+
+    /**
+     * Clear all slot-based usage records.
+     * Called when all daily rotating trades are force-rotated.
+     */
+    public void clearAllSlotUsage() {
+        int clearedCount = 0;
+        var iterator = usageRecords.entrySet().iterator();
+        while (iterator.hasNext()) {
+            String key = iterator.next().getKey();
+            // Match keys with ":slot:" pattern
+            if (key.contains(":slot:")) {
+                iterator.remove();
+                clearedCount++;
+            }
+        }
+        if (clearedCount > 0) {
+            setDirty();
+            CobblemonMerchants.LOGGER.info("Cleared all {} slot usage records", clearedCount);
+        }
+    }
+
+    // ===== Permanent one-time trade tracking (e.g., mysterious orb) =====
+
+    /**
+     * Creates a unique key for tracking permanent one-time trades.
+     * These are NOT reset daily - they persist until explicitly reset.
+     */
+    private static String createPermanentKey(UUID playerUUID, String tradeKey) {
+        return playerUUID.toString() + ":permanent:" + tradeKey;
+    }
+
+    /**
+     * Check if a player has used a permanent one-time trade.
+     * @param playerUUID The player's UUID
+     * @param tradeKey A unique identifier for the trade (e.g., "mysterious_orb")
+     * @return true if the player has already used this one-time trade
+     */
+    public boolean hasPermanentTradeBeenUsed(UUID playerUUID, String tradeKey) {
+        String key = createPermanentKey(playerUUID, tradeKey);
+        TradeUsageRecord record = usageRecords.get(key);
+        return record != null && record.usesToday > 0;
+    }
+
+    /**
+     * Get the number of times a player has used a permanent trade.
+     * Unlike daily trades, this doesn't reset at midnight.
+     */
+    public int getPermanentTradeUses(UUID playerUUID, String tradeKey) {
+        String key = createPermanentKey(playerUUID, tradeKey);
+        TradeUsageRecord record = usageRecords.get(key);
+        return record != null ? record.usesToday : 0;
+    }
+
+    /**
+     * Record that a player has used a permanent one-time trade.
+     * @param playerUUID The player's UUID
+     * @param tradeKey A unique identifier for the trade (e.g., "mysterious_orb")
+     */
+    public void recordPermanentTradeUse(UUID playerUUID, String tradeKey) {
+        String key = createPermanentKey(playerUUID, tradeKey);
+        // Use day = -1 to indicate this is a permanent record that shouldn't be cleaned up
+        TradeUsageRecord record = usageRecords.get(key);
+        int newUses = (record != null ? record.usesToday : 0) + 1;
+        usageRecords.put(key, new TradeUsageRecord(-1, newUses));
+        setDirty();
+
+        CobblemonMerchants.LOGGER.info("Permanent trade use recorded: player={}, tradeKey={}, total uses={}",
+            playerUUID, tradeKey, newUses);
+    }
+
+    /**
+     * Reset a permanent one-time trade for a player, allowing them to use it again.
+     * Called by /hunt stage commands to reset quest-related trades.
+     * @param playerUUID The player's UUID
+     * @param tradeKey A unique identifier for the trade (e.g., "mysterious_orb")
+     * @return true if a record was reset, false if no record existed
+     */
+    public boolean resetPermanentTrade(UUID playerUUID, String tradeKey) {
+        String key = createPermanentKey(playerUUID, tradeKey);
+        TradeUsageRecord removed = usageRecords.remove(key);
+        if (removed != null) {
+            setDirty();
+            CobblemonMerchants.LOGGER.info("Reset permanent trade for player {}: {}", playerUUID, tradeKey);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Reset all permanent trades for a player.
+     * @param playerUUID The player's UUID
+     * @return The number of permanent trades reset
+     */
+    public int resetAllPermanentTrades(UUID playerUUID) {
+        String prefix = playerUUID.toString() + ":permanent:";
+        int count = 0;
+        var iterator = usageRecords.entrySet().iterator();
+        while (iterator.hasNext()) {
+            if (iterator.next().getKey().startsWith(prefix)) {
+                iterator.remove();
+                count++;
+            }
+        }
+        if (count > 0) {
+            setDirty();
+            CobblemonMerchants.LOGGER.info("Reset {} permanent trades for player {}", count, playerUUID);
+        }
+        return count;
+    }
+
+    /**
+     * Static method for external mods (like skyscobblemonitems) to reset the mysterious orb trade.
+     * This can be called via reflection when /hunt stage is changed to 0 or 1.
+     * @param level Any server level (used to get the manager instance)
+     * @param playerUUID The player's UUID
+     * @return true if the trade was reset
+     */
+    public static boolean resetMysteriousOrbTrade(ServerLevel level, UUID playerUUID) {
+        DailyTradeResetManager manager = get(level);
+        return manager.resetPermanentTrade(playerUUID, "mysterious_orb");
+    }
+
     /**
      * Reset all trade usage for a specific player.
      */
@@ -121,6 +323,7 @@ public class DailyTradeResetManager extends SavedData {
     /**
      * Clean up old records (from previous days) to prevent data bloat.
      * Called periodically or on server start.
+     * NOTE: Permanent records (day = -1) are preserved.
      */
     public void cleanupOldRecords() {
         long todayEpochDay = LocalDate.now(ZoneId.systemDefault()).toEpochDay();
@@ -129,7 +332,9 @@ public class DailyTradeResetManager extends SavedData {
         var iterator = usageRecords.entrySet().iterator();
         while (iterator.hasNext()) {
             var entry = iterator.next();
-            if (entry.getValue().lastUseDay < todayEpochDay) {
+            long recordDay = entry.getValue().lastUseDay;
+            // Skip permanent records (day = -1) and current day records
+            if (recordDay != -1 && recordDay < todayEpochDay) {
                 iterator.remove();
                 removed++;
             }

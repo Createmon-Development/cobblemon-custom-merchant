@@ -54,6 +54,48 @@ public class ItemRequirement {
     }
 
     /**
+     * Creates a free trade marker ItemRequirement.
+     * This is used for daily rotating trades with trade_type="free".
+     * The marker is identified by having count = 0.
+     *
+     * @return An ItemRequirement with count 0 that signals a free trade
+     */
+    public static ItemRequirement createFreeTradeMarker() {
+        // Use structure_void as a placeholder - it's unobtainable by players
+        return new ItemRequirement(
+            new ItemStack(net.minecraft.world.item.Items.STRUCTURE_VOID, 1),
+            null,
+            0, // Count 0 marks this as a free trade
+            "Free",
+            false
+        );
+    }
+
+    /**
+     * Creates an ItemRequirement from an item ID string.
+     *
+     * @param itemId The item ID (e.g., "minecraft:diamond", "cobblemon:relic_coin")
+     * @param count The required count
+     * @return The ItemRequirement, or a barrier fallback if the item ID is invalid
+     */
+    public static ItemRequirement fromItemId(String itemId, int count) {
+        try {
+            ResourceLocation itemLoc = ResourceLocation.parse(itemId);
+            Item item = BuiltInRegistries.ITEM.get(itemLoc);
+            if (item == null || item == net.minecraft.world.item.Items.AIR) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "Unknown item ID '{}', using barrier as fallback", itemId);
+                return createBrokenItemRequirement(count, null);
+            }
+            return new ItemRequirement(new ItemStack(item, count), null, count, null, false);
+        } catch (Exception e) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                "Failed to parse item ID '{}': {}", itemId, e.getMessage());
+            return createBrokenItemRequirement(count, null);
+        }
+    }
+
+    /**
      * Creates a fallback ItemRequirement using a barrier item for broken/missing items.
      */
     private static ItemRequirement createBrokenItemRequirement(int count, String displayName) {

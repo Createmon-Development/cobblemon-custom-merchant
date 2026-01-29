@@ -1,6 +1,7 @@
 package net.fit.cobblemonmerchants.merchant;
 
 import net.fit.cobblemonmerchants.CobblemonMerchants;
+import net.fit.cobblemonmerchants.npc.AssistantNPCEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -20,6 +21,15 @@ public class ModEntities {
                     .ridingOffset(-0.6F)
                     .clientTrackingRange(10)
                     .build(CobblemonMerchants.MODID + ":custom_merchant"));
+
+    public static final DeferredHolder<EntityType<?>, EntityType<AssistantNPCEntity>> ASSISTANT_NPC =
+            ENTITY_TYPES.register("assistant_npc", () -> EntityType.Builder
+                    .of(AssistantNPCEntity::new, MobCategory.MISC)
+                    .sized(0.6F, 1.95F)
+                    .eyeHeight(1.62F)
+                    .ridingOffset(-0.6F)
+                    .clientTrackingRange(10)
+                    .build(CobblemonMerchants.MODID + ":assistant_npc"));
 
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);

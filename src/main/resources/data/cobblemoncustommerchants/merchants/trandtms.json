@@ -1,0 +1,67 @@
+{
+  "display_name": "Move Merchant",
+  "villager_biome": "minecraft:snow",
+  "villager_profession": "cobblemon:nurse",
+  "trades": [
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_protect",
+        "count": 1
+      }
+        },
+        {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_wideguard",
+        "count": 1
+      }
+        },
+        {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_reflect",
+        "count": 1
+      }
+        },
+        {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_lightscreen",
+        "count": 1
+      }
+        },
+        {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_swordsdance",
+        "count": 1
+      }
+        },
+        {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_nastyplot",
+        "count": 1
+      }
+    }
+  ]
+}

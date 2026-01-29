@@ -1,0 +1,218 @@
+{
+  "description": "Treasure Hunter dialogue for Crystal Ascendancy quest - main merchant interactions",
+  "dialogue_lines": [
+    {"_comment": "========== STEP 3A: Player has orb but merchant NOT housed =========="},
+
+    {
+      "id": "step3_orb_not_housed",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "Oh! That orb. I've seen that script somewhere before.",
+      "conditions": [
+        {"type": "merchant_variant", "variant": "default"},
+        {"type": "holding_item_state", "item": "skyscobblemonitems:mysterious_orb", "component": "orb_state", "value": 3}
+      ],
+      "priority": 100,
+      "repeatable": false,
+      "return_line": "step3_need_facilities",
+      "next": "step3_need_facilities"
+    },
+    {
+      "id": "step3_need_facilities",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "If I had the proper facilities I could search my archives for more information.",
+      "entry_point": false,
+      "repeatable": true,
+      "end": true
+    },
+
+    {"_comment": "========== STEP 3B: Player has orb AND merchant is housed =========="},
+
+    {
+      "id": "step3_orb_housed",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "Oh! That orb. I've seen that script somewhere before.",
+      "conditions": [
+        {"type": "merchant_variant", "variant": "housed"},
+        {"type": "holding_item_state", "item": "skyscobblemonitems:mysterious_orb", "component": "orb_state", "value": 3}
+      ],
+      "priority": 100,
+      "repeatable": false,
+      "return_line": "step3_dive_router",
+      "next": "step3_found_parchment"
+    },
+    {
+      "id": "step3_found_parchment",
+      "type": "dialogue",
+      "text": "Ahh, here it is. An old parchment with the same script as your orb! It was donated to me by a trainer exploring in the oceans to the far South East of spawn.",
+      "entry_point": false,
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "dive"}],
+          "next": "step3_has_dive"
+        }
+      ],
+      "default": "step3_no_dive"
+    },
+    {
+      "id": "step3_no_dive",
+      "type": "dialogue",
+      "text": "I fear the temple is too difficult to enter without the aid of a pokemon. Come back to me when you have a pokemon that could help you.",
+      "entry_point": false,
+      "repeatable": true,
+      "end": true
+    },
+    {
+      "id": "step3_has_dive",
+      "type": "dialogue",
+      "text": "Wonderful! One of your pokemon has dive. With their help you can enter the temple!",
+      "entry_point": false,
+      "next": "step3_give_map"
+    },
+    {
+      "id": "step3_give_map",
+      "type": "dialogue",
+      "text": "Here, take this map to the temple near where the parchment was found, you may be able to find a way to decipher them. I'll send my assistant to the temple to meet you there.",
+      "entry_point": false,
+      "actions": [
+        {"type": "give_item", "item": "skyscobblemonitems:temple_treasure_map", "count": 1},
+        {"type": "play_sound", "sound": "minecraft:entity.villager.yes"}
+      ],
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "teleport"}],
+          "next": "step3_has_teleport"
+        }
+      ],
+      "default": "step3_no_teleport"
+    },
+    {
+      "id": "step3_no_teleport",
+      "type": "dialogue",
+      "text": "Best of luck on the journey to the temple! If you had the right pokemon you could get there much faster.",
+      "entry_point": false,
+      "repeatable": true,
+      "end": true
+    },
+    {
+      "id": "step3_has_teleport",
+      "type": "dialogue",
+      "text": "oh! You've got a pokemon with Teleport. They'll take you right there!",
+      "entry_point": false,
+      "repeatable": true,
+      "actions": [
+        {"type": "teleport_option", "text": "[Teleport to Temple]", "hover_text": "Click to teleport to the Temple", "destination": {"x": 3119, "y": 63, "z": 6339, "dimension": "minecraft:overworld"}}
+      ],
+      "end": true
+    },
+
+    {"_comment": "========== STEP 3B RETURN: Player returns while still holding orb =========="},
+
+    {
+      "id": "step3_dive_router",
+      "type": "dialogue",
+      "text": "",
+      "entry_point": false,
+      "branches": [
+        {
+          "conditions": [
+            {"type": "has_pokemon_move", "move": "dive"},
+            {"type": "has_item", "item": "skyscobblemonitems:temple_treasure_map"}
+          ],
+          "next": "step3_teleport_router"
+        },
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "dive"}],
+          "next": "step3_has_dive"
+        }
+      ],
+      "default": "step3_no_dive"
+    },
+
+    {
+      "id": "step3_teleport_router",
+      "type": "dialogue",
+      "text": "",
+      "entry_point": false,
+      "branches": [
+        {
+          "conditions": [{"type": "has_pokemon_move", "move": "teleport"}],
+          "next": "step3_has_teleport"
+        }
+      ],
+      "default": "step3_no_teleport"
+    },
+
+    {"_comment": "========== STEP 4: Player has tablet (not glowing) =========="},
+
+    {
+      "id": "step4_tablet_first_interaction",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "You've found the ancient tablet! Joyous day! I must have a look at it.",
+      "conditions": [
+        {"type": "merchant_variant", "variant": "housed"},
+        {"type": "holding_item_state", "item": "skyscobblemonitems:runic_cipher_tablet", "component": "tablet_glowing", "bool_value": false}
+      ],
+      "priority": 190,
+      "repeatable": false,
+      "return_line": "step4_tablet_not_glowing_repeat",
+      "next": "step4_tablet_not_glowing_repeat"
+    },
+    {
+      "id": "step4_tablet_not_glowing_repeat",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "Hmmmm... I can't quite make out any of the figures. Try to find a way to brighten up the text.",
+      "repeatable": true,
+      "end": true
+    },
+
+    {"_comment": "========== STEP 4: Player has tablet (glowing) =========="},
+
+    {
+      "id": "step4_glowing_tablet",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "Glow Squid Ink, of course! Brilliant!",
+      "conditions": [
+        {"type": "merchant_variant", "variant": "housed"},
+        {"type": "holding_item_state", "item": "skyscobblemonitems:runic_cipher_tablet", "component": "tablet_glowing", "bool_value": true}
+      ],
+      "priority": 200,
+      "repeatable": false,
+      "return_line": "step4_done",
+      "next": "step4_glowing_tablet_2"
+    },
+    {
+      "id": "step4_glowing_tablet_2",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "Hmmmm, I see I see. This is the translation cipher for the archaic script, it matches up perfectly with my parchment.",
+      "repeatable": false,
+      "next": "step4_give_parchment"
+    },
+    {
+      "id": "step4_give_parchment",
+      "type": "dialogue",
+      "text": "Here, take the old parchment, it may help you figure out the secrets of your orb.",
+      "entry_point": false,
+      "actions": [
+        {"type": "give_item", "item": "skyscobblemonitems:mysterious_parchment", "count": 1},
+        {"type": "play_sound", "sound": "minecraft:entity.player.levelup"}
+      ],
+      "next": "step4_done"
+    },
+    {
+      "id": "step4_done",
+      "type": "dialogue",
+      "speaker": "Treasure Hunter",
+      "text": "I've done all I can to help you, the rest is up to you <3.",
+      "entry_point": false,
+      "repeatable": true,
+      "end": true
+    }
+  ]
+}

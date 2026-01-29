@@ -112,6 +112,16 @@ public class DailyRewardManager extends SavedData {
     }
 
     /**
+     * Reset all daily reward claims for all players.
+     */
+    public void resetAllClaims() {
+        int count = claimRecords.size();
+        claimRecords.clear();
+        setDirty();
+        CobblemonMerchants.LOGGER.info("Reset all {} daily reward claims", count);
+    }
+
+    /**
      * Get the number of days since a player last claimed from a specific merchant.
      * Returns -1 if never claimed.
      * @param playerUUID The player's UUID

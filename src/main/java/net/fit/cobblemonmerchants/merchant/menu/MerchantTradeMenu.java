@@ -35,6 +35,8 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     private int dailyRewardPosition = -1;
     private boolean dailyRewardClaimed = false;
     private String timeUntilReset = "";
+    private long initialResetMillis = 0; // Initial milliseconds until reset from server
+    private long menuOpenedTime = 0; // System time when menu was opened (for countdown)
     private int dailyRewardMinCount = 1;
     private int dailyRewardMaxCount = 1;
     private boolean dailyRewardSharedCooldown = true;
@@ -67,7 +69,8 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
                 input, secondInput, output, outputCount, maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
                 java.util.Optional.empty(), // variantOverrides not needed client-side
                 false, // dailyReset not needed client-side
-                java.util.Optional.empty() // variants not needed client-side
+                java.util.Optional.empty(), // variants not needed client-side
+                java.util.Optional.empty() // slotId not needed client-side
             ));
         }
 
@@ -79,13 +82,15 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             this.dailyRewardItem = ItemStack.STREAM_CODEC.decode(registryBuf);
             this.dailyRewardPosition = extraData.readInt();
             this.dailyRewardClaimed = extraData.readBoolean();
-            this.timeUntilReset = extraData.readUtf();
+            this.initialResetMillis = extraData.readLong(); // Read milliseconds from server
+            this.menuOpenedTime = System.currentTimeMillis(); // Record when menu was opened
+            this.timeUntilReset = formatMillisToTime(this.initialResetMillis); // Format for display
             this.dailyRewardMinCount = extraData.readInt();
             this.dailyRewardMaxCount = extraData.readInt();
             this.dailyRewardSharedCooldown = extraData.readBoolean();
             this.merchantEntityUUID = extraData.readUUID();
-            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Daily reward at position {}, claimed: {}, reset in: {}, count: {}-{}, sharedCooldown: {}",
-                this.dailyRewardPosition, this.dailyRewardClaimed, this.timeUntilReset, this.dailyRewardMinCount, this.dailyRewardMaxCount, this.dailyRewardSharedCooldown);
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Daily reward at position {}, claimed: {}, reset in: {}ms ({}), count: {}-{}, sharedCooldown: {}",
+                this.dailyRewardPosition, this.dailyRewardClaimed, this.initialResetMillis, this.timeUntilReset, this.dailyRewardMinCount, this.dailyRewardMaxCount, this.dailyRewardSharedCooldown);
         }
 
         // Try to get the merchant from the world
@@ -141,16 +146,39 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
                     serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                     net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
                         net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
-                    int usesToday = resetManager.getUsesToday(player.getUUID(), merchantIdStr, i);
+
+                    int usesToday;
+                    // Use slot-based tracking if slotId is present (for daily rotating trades)
+                    if (tradeEntries.get(i).slotId().isPresent()) {
+                        String slotId = tradeEntries.get(i).slotId().get();
+                        usesToday = resetManager.getUsesTodayBySlot(player.getUUID(), slotId);
+                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                            "SERVER: Initialized daily rotating trade {} (slot={}) with uses={}/{} for player {}",
+                            i, slotId, usesToday, copy.getMaxUses(), player.getName().getString());
+                    } else {
+                        usesToday = resetManager.getUsesToday(player.getUUID(), merchantIdStr, i);
+                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                            "SERVER: Initialized daily reset trade {} with uses={}/{} for player {}",
+                            i, usesToday, copy.getMaxUses(), player.getName().getString());
+                    }
 
                     // Set the uses on the copy to reflect player's daily usage
                     for (int u = 0; u < usesToday; u++) {
                         copy.increaseUses();
                     }
+                }
+            }
 
+            // Check for one-time trades (like mysterious orb) and mark as out of stock if already used
+            if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                if (isOneTimeTradeUsed(serverPlayer, copy)) {
+                    // Set uses to max to show as out of stock
+                    while (copy.getUses() < copy.getMaxUses()) {
+                        copy.increaseUses();
+                    }
                     net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-                        "SERVER: Initialized daily reset trade {} with uses={}/{} for player {}",
-                        i, copy.getUses(), copy.getMaxUses(), player.getName().getString());
+                        "SERVER: Trade {} is a one-time trade already used, marking as out of stock",
+                        i);
                 }
             }
 
@@ -245,10 +273,47 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     }
 
     /**
-     * Updates the time until reset string (for live updates)
+     * Updates the time until reset string based on elapsed time since menu opened.
+     * This ensures the countdown uses server time, not client time.
      */
-    public void updateTimeUntilReset(String time) {
-        this.timeUntilReset = time;
+    public void updateTimeUntilResetFromElapsed() {
+        if (initialResetMillis > 0 && menuOpenedTime > 0) {
+            long elapsed = System.currentTimeMillis() - menuOpenedTime;
+            long remaining = Math.max(0, initialResetMillis - elapsed);
+            this.timeUntilReset = formatMillisToTime(remaining);
+        }
+    }
+
+    /**
+     * Formats milliseconds into a human-readable time string (e.g., "5h 23m")
+     */
+    private static String formatMillisToTime(long millis) {
+        if (millis <= 0) {
+            return "0m";
+        }
+        long totalSeconds = millis / 1000;
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+
+        if (hours > 0) {
+            return hours + "h " + minutes + "m";
+        } else {
+            return minutes + "m";
+        }
+    }
+
+    /**
+     * Gets the initial reset milliseconds sent from server (for external use)
+     */
+    public long getInitialResetMillis() {
+        return initialResetMillis;
+    }
+
+    /**
+     * Gets the time when this menu was opened (for external use)
+     */
+    public long getMenuOpenedTime() {
+        return menuOpenedTime;
     }
 
     /**
@@ -286,83 +351,113 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
 
         // Check daily reset limits if enabled
         net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-            "SERVER: Trade {} dailyReset={}, maxUses={}",
-            tradeIndex, tradeEntry.dailyReset(), tradeEntry.maxUses());
+            "SERVER: Trade {} dailyReset={}, maxUses={}, slotId={}",
+            tradeIndex, tradeEntry.dailyReset(), tradeEntry.maxUses(), tradeEntry.slotId().orElse("none"));
         if (tradeEntry.dailyReset() && player instanceof ServerPlayer serverPlayer) {
             if (serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                 net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
                     net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
-                String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
                 int maxUses = tradeEntry.maxUses();
-                int usesToday = resetManager.getUsesToday(player.getUUID(), merchantId, tradeIndex);
 
-                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-                    "SERVER: Daily trade check - player={}, merchant={}, trade={}, usesToday={}, maxUses={}, canUse={}",
-                    player.getName().getString(), merchantId, tradeIndex, usesToday, maxUses, usesToday < maxUses);
+                // Use slot-based tracking if slotId is present (for daily rotating trades)
+                boolean canUse;
+                if (tradeEntry.slotId().isPresent()) {
+                    String slotId = tradeEntry.slotId().get();
+                    int usesToday = resetManager.getUsesTodayBySlot(player.getUUID(), slotId);
+                    canUse = resetManager.canUseSlotTrade(player.getUUID(), slotId, maxUses);
 
-                if (!resetManager.canUseTrade(player.getUUID(), merchantId, tradeIndex, maxUses)) {
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "SERVER: Daily slot trade check - player={}, slotId={}, usesToday={}, maxUses={}, canUse={}",
+                        player.getName().getString(), slotId, usesToday, maxUses, canUse);
+                } else {
+                    String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
+                    int usesToday = resetManager.getUsesToday(player.getUUID(), merchantId, tradeIndex);
+                    canUse = resetManager.canUseTrade(player.getUUID(), merchantId, tradeIndex, maxUses);
+
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "SERVER: Daily trade check - player={}, merchant={}, trade={}, usesToday={}, maxUses={}, canUse={}",
+                        player.getName().getString(), merchantId, tradeIndex, usesToday, maxUses, canUse);
+                }
+
+                if (!canUse) {
                     // Player has used up their daily limit for this trade
                     net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-                        "SERVER: Player {} has reached daily limit for trade {} from merchant {}",
-                        player.getName().getString(), tradeIndex, merchantId);
+                        "SERVER: Player {} has reached daily limit for trade {}",
+                        player.getName().getString(), tradeIndex);
                     return false;
                 }
             }
         }
 
-        // Count how many of each required item the player has
-        net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq = tradeEntry.input();
-        int countA = 0;
-
-        // Special handling for relic coins - check bag too
-        if (isRelicCoin(inputReq)) {
-            countA = countRelicCoins(player);
-        } else {
-            for (ItemStack stack : player.getInventory().items) {
-                if (inputReq.matches(stack)) {
-                    countA += stack.getCount();
-                }
+        // Check for one-time trade restrictions (e.g., mysterious orb)
+        if (player instanceof ServerPlayer serverPlayer) {
+            if (!canExecuteOneTimeTrade(serverPlayer, offer)) {
+                return false;
             }
         }
 
-        int countB = 0;
-        if (tradeEntry.secondInput().isPresent()) {
-            net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondInputReq = tradeEntry.secondInput().get();
+        // Check if this is a free trade (input count is 0)
+        net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq = tradeEntry.input();
+        boolean isFreeTrade = inputReq.getCount() <= 0;
+
+        if (!isFreeTrade) {
+            // Count how many of each required item the player has
+            int countA = 0;
 
             // Special handling for relic coins - check bag too
-            if (isRelicCoin(secondInputReq)) {
-                countB = countRelicCoins(player);
+            if (isRelicCoin(inputReq)) {
+                countA = countRelicCoins(player);
             } else {
                 for (ItemStack stack : player.getInventory().items) {
-                    if (secondInputReq.matches(stack)) {
-                        countB += stack.getCount();
+                    if (inputReq.matches(stack)) {
+                        countA += stack.getCount();
                     }
                 }
             }
-        }
 
-        // Check if player has enough items
-        if (countA < inputReq.getCount()) {
-            return false;
-        }
-        if (tradeEntry.secondInput().isPresent() && countB < tradeEntry.secondInput().get().getCount()) {
-            return false;
-        }
+            int countB = 0;
+            if (tradeEntry.secondInput().isPresent()) {
+                net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondInputReq = tradeEntry.secondInput().get();
 
-        // Remove the cost items from player inventory
-        if (isRelicCoin(inputReq)) {
-            removeRelicCoins(player, inputReq.getCount());
-        } else {
-            removeItemsMatching(player.getInventory(), inputReq, inputReq.getCount());
-        }
-
-        if (tradeEntry.secondInput().isPresent()) {
-            net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondInputReq = tradeEntry.secondInput().get();
-            if (isRelicCoin(secondInputReq)) {
-                removeRelicCoins(player, secondInputReq.getCount());
-            } else {
-                removeItemsMatching(player.getInventory(), secondInputReq, secondInputReq.getCount());
+                // Special handling for relic coins - check bag too
+                if (isRelicCoin(secondInputReq)) {
+                    countB = countRelicCoins(player);
+                } else {
+                    for (ItemStack stack : player.getInventory().items) {
+                        if (secondInputReq.matches(stack)) {
+                            countB += stack.getCount();
+                        }
+                    }
+                }
             }
+
+            // Check if player has enough items
+            if (countA < inputReq.getCount()) {
+                return false;
+            }
+            if (tradeEntry.secondInput().isPresent() && countB < tradeEntry.secondInput().get().getCount()) {
+                return false;
+            }
+
+            // Remove the cost items from player inventory
+            if (isRelicCoin(inputReq)) {
+                removeRelicCoins(player, inputReq.getCount());
+            } else {
+                removeItemsMatching(player.getInventory(), inputReq, inputReq.getCount());
+            }
+
+            if (tradeEntry.secondInput().isPresent()) {
+                net.fit.cobblemonmerchants.merchant.config.ItemRequirement secondInputReq = tradeEntry.secondInput().get();
+                if (isRelicCoin(secondInputReq)) {
+                    removeRelicCoins(player, secondInputReq.getCount());
+                } else {
+                    removeItemsMatching(player.getInventory(), secondInputReq, secondInputReq.getCount());
+                }
+            }
+        } else {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.debug(
+                "Trade {} is a free trade (input count = 0), skipping input checks",
+                tradeIndex);
         }
 
         // Give the player the result item
@@ -405,20 +500,183 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             if (serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                 net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
                     net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
-                String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
-                resetManager.recordTradeUse(player.getUUID(), merchantId, tradeIndex);
+
+                // Use slot-based tracking if slotId is present (for daily rotating trades)
+                if (tradeEntry.slotId().isPresent()) {
+                    String slotId = tradeEntry.slotId().get();
+                    resetManager.recordSlotTradeUse(player.getUUID(), slotId);
+                } else {
+                    String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
+                    resetManager.recordTradeUse(player.getUUID(), merchantId, tradeIndex);
+                }
             }
         }
 
         // Record transaction in ledger
         if (player instanceof ServerPlayer serverPlayer) {
             recordTransactionToLedger(serverPlayer, tradeEntry, offer);
+
+            // Mark one-time trades as used (e.g., mysterious orb)
+            // NOTE: Use offer.getResult() instead of 'result' because 'result' was mutated
+            // by player.getInventory().add() which shrinks the stack to air when items are added
+            markOneTimeTradeUsed(serverPlayer, offer.getResult());
+
+            // Check for special trade actions (e.g., mysterious orb trade broadcast)
+            checkSpecialTradeActions(serverPlayer, offer.getResult());
         }
 
         // Mark for sync on next broadcastChanges
         needsSync = true;
 
         return true;
+    }
+
+    /**
+     * Checks for special trade actions and executes them.
+     * Currently handles the mysterious orb trade broadcast.
+     * The broadcast fires when the permanent trade tracking shows exactly 1 use (first time).
+     */
+    private void checkSpecialTradeActions(ServerPlayer player, ItemStack result) {
+        ResourceLocation resultItemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(result.getItem());
+
+        // Debug log to see what item is being checked
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "SERVER: checkSpecialTradeActions called with item: {} for player {}",
+            resultItemId.toString(), player.getName().getString());
+
+        // Check if the player received a mysterious orb
+        if (resultItemId.toString().equals("skyscobblemonitems:mysterious_orb")) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "SERVER: checkSpecialTradeActions - item IS mysterious_orb");
+            if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
+
+                // Only broadcast on first use (uses == 1 after recording)
+                int uses = resetManager.getPermanentTradeUses(player.getUUID(), "mysterious_orb");
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "SERVER: getPermanentTradeUses returned {} for player {}",
+                    uses, player.getName().getString());
+                if (uses != 1) {
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "Player {} mysterious orb uses={}, skipping broadcast (only on first use)",
+                        player.getName().getString(), uses);
+                    return;
+                }
+
+                // Broadcast the message to all players on the server
+                // Format: (B:green) <player_name> (B:white) has started the path for the (B:royal_blue) Cobalt Ascendancy.
+                net.minecraft.network.chat.Component message = net.minecraft.network.chat.Component.literal(player.getName().getString())
+                    .withStyle(net.minecraft.ChatFormatting.GREEN, net.minecraft.ChatFormatting.BOLD)
+                    .append(net.minecraft.network.chat.Component.literal(" has started the path for the ")
+                        .withStyle(net.minecraft.ChatFormatting.WHITE, net.minecraft.ChatFormatting.BOLD))
+                    .append(net.minecraft.network.chat.Component.literal("Cobalt Ascendancy")
+                        .withStyle(net.minecraft.ChatFormatting.BLUE, net.minecraft.ChatFormatting.BOLD))
+                    .append(net.minecraft.network.chat.Component.literal(".")
+                        .withStyle(net.minecraft.ChatFormatting.WHITE, net.minecraft.ChatFormatting.BOLD));
+
+                for (ServerPlayer onlinePlayer : player.server.getPlayerList().getPlayers()) {
+                    onlinePlayer.sendSystemMessage(message);
+                    // Play end portal spawn sound globally to all players
+                    onlinePlayer.level().playSound(
+                        null, // null means all players nearby can hear it
+                        onlinePlayer.getX(), onlinePlayer.getY(), onlinePlayer.getZ(),
+                        net.minecraft.sounds.SoundEvents.END_PORTAL_SPAWN,
+                        net.minecraft.sounds.SoundSource.MASTER,
+                        1.0F, 1.0F
+                    );
+                }
+
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "SERVER: Player {} has started the Path for the Cobalt Ascendancy (received mysterious orb)",
+                    player.getName().getString());
+            }
+        }
+    }
+
+    /**
+     * Checks if a one-time trade can be executed.
+     * Currently handles the mysterious orb trade which is limited to 1 per player.
+     * Returns false if the player has already used this one-time trade.
+     */
+    private boolean canExecuteOneTimeTrade(ServerPlayer player, net.minecraft.world.item.trading.MerchantOffer offer) {
+        ResourceLocation resultItemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(offer.getResult().getItem());
+
+        // Check if this is the mysterious orb trade (one-time per player)
+        if (resultItemId.toString().equals("skyscobblemonitems:mysterious_orb")) {
+            if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
+
+                if (resetManager.hasPermanentTradeBeenUsed(player.getUUID(), "mysterious_orb")) {
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "Player {} has already used the mysterious orb trade (one-time limit)",
+                        player.getName().getString());
+                    // Send message to player
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "You have already obtained a mysterious orb.")
+                        .withStyle(net.minecraft.ChatFormatting.RED));
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Marks a one-time trade as used after successful execution.
+     */
+    private void markOneTimeTradeUsed(ServerPlayer player, ItemStack result) {
+        ResourceLocation resultItemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(result.getItem());
+
+        // Debug log to see what item is being checked
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "SERVER: markOneTimeTradeUsed called with item: {} for player {}",
+            resultItemId.toString(), player.getName().getString());
+
+        // Mark mysterious orb trade as used
+        if (resultItemId.toString().equals("skyscobblemonitems:mysterious_orb")) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "SERVER: Item IS mysterious_orb, recording permanent trade use");
+            if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
+                resetManager.recordPermanentTradeUse(player.getUUID(), "mysterious_orb");
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "SERVER: Marked mysterious orb trade as used for player {}",
+                    player.getName().getString());
+            } else {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "SERVER: player.level() is not ServerLevel, cannot record permanent trade");
+            }
+        }
+    }
+
+    /**
+     * Checks if a one-time trade has already been used by the player.
+     * Used during menu initialization to show the trade as out of stock.
+     */
+    private boolean isOneTimeTradeUsed(ServerPlayer player, net.minecraft.world.item.trading.MerchantOffer offer) {
+        ResourceLocation resultItemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(offer.getResult().getItem());
+
+        // Check if this is the mysterious orb trade (one-time per player)
+        if (resultItemId.toString().equals("skyscobblemonitems:mysterious_orb")) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "SERVER: isOneTimeTradeUsed checking mysterious_orb for player {}",
+                player.getName().getString());
+            if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
+                boolean used = resetManager.hasPermanentTradeBeenUsed(player.getUUID(), "mysterious_orb");
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "SERVER: mysterious_orb hasPermanentTradeBeenUsed={} for player {}",
+                    used, player.getName().getString());
+                return used;
+            }
+        }
+
+        return false;
     }
 
     // Legacy validation for trades without TradeEntry (Black Market, etc.)

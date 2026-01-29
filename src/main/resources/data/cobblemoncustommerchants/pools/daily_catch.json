@@ -1,0 +1,16 @@
+{
+  "description": "Daily catch - exchange fish for relic coins",
+  "input_item": "cobblemon:relic_coin",
+  "entries": [
+    {
+      "tag": "minecraft:fishes",
+      "input_min_amount": 1,
+      "input_max_amount": 3,
+      "output_min_amount": 1,
+      "output_max_amount": 3,
+      "weight": 1,
+      "max_uses": 10,
+      "display_name": "Daily Catch"
+    }
+  ]
+}

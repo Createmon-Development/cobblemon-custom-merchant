@@ -222,12 +222,60 @@ public class CustomMerchantEntity extends Villager {
             }
         }
 
-        // Open custom chest-style trading GUI
         if (!this.level().isClientSide && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             this.setTradingPlayer(player);
+
+            // Check for action configuration
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig config =
+                net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(this.traderId);
+
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "[MobInteract] traderId={}, config={}, actionId={}",
+                this.traderId,
+                config != null ? "present" : "null",
+                config != null ? config.actionId().orElse("none") : "N/A");
+
+            if (config != null && config.actionId().isPresent()) {
+                net.minecraft.resources.ResourceLocation actionId =
+                    net.minecraft.resources.ResourceLocation.parse(config.actionId().get());
+
+                if (config.actionBeforeTrade()) {
+                    // Execute dialogue with conditions required
+                    // If quest dialogue conditions match: show dialogue, do NOT open menu
+                    // If no quest conditions match: open menu silently
+                    net.fit.cobblemonmerchants.action.ActionExecutor.executeDialogueOrFallback(
+                        serverPlayer, this, actionId,
+                        () -> openCustomTradeScreen(serverPlayer)  // Only opens when no dialogue found
+                    );
+                } else {
+                    // Dialogue only, no trade menu - show any matching dialogue including default greeting
+                    net.fit.cobblemonmerchants.action.ActionExecutor.executeDialogue(
+                        serverPlayer, this, actionId, null
+                    );
+                }
+                return InteractionResult.sidedSuccess(this.level().isClientSide);
+            }
+
+            // Default: open trade screen directly
             openCustomTradeScreen(serverPlayer);
         }
         return InteractionResult.sidedSuccess(this.level().isClientSide);
+    }
+
+    /**
+     * Gets the merchant's display name for dialogue speakers.
+     */
+    public String getMerchantDisplayName() {
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig config =
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(this.traderId);
+        if (config != null) {
+            return config.displayName();
+        }
+        Component customName = this.getCustomName();
+        if (customName != null) {
+            return customName.getString();
+        }
+        return "Merchant";
     }
 
     /**
@@ -330,19 +378,32 @@ public class CustomMerchantEntity extends Villager {
         net.minecraft.world.item.ItemStack.STREAM_CODEC.encode(registryBuf, rewardVariant.item());
         buf.writeInt(rewardVariant.displayPosition().get());
         buf.writeBoolean(hasClaimed);
-        buf.writeUtf(net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager.getFormattedTimeUntilReset());
+        // Write milliseconds until reset (server timezone) instead of formatted string
+        long millisUntilReset = net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager.getTimeUntilReset().toMillis();
+        buf.writeLong(millisUntilReset);
         buf.writeInt(rewardVariant.minCount());
         buf.writeInt(rewardVariant.maxCount());
         buf.writeBoolean(dailyConfig.sharedCooldown());
         // Write entity UUID for per-entity cooldown tracking
         buf.writeUUID(this.getUUID());
 
-        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("writeDailyRewardInfo: SUCCESS! position={}, claimed={}, sharedCooldown={}, entityUUID={}, item={}, minCount={}, maxCount={}",
-            rewardVariant.displayPosition().get(), hasClaimed, dailyConfig.sharedCooldown(), this.getUUID(), rewardVariant.item(), rewardVariant.minCount(), rewardVariant.maxCount());
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("writeDailyRewardInfo: SUCCESS! position={}, claimed={}, resetIn={}ms, sharedCooldown={}, entityUUID={}, item={}, minCount={}, maxCount={}",
+            rewardVariant.displayPosition().get(), hasClaimed, millisUntilReset, dailyConfig.sharedCooldown(), this.getUUID(), rewardVariant.item(), rewardVariant.minCount(), rewardVariant.maxCount());
     }
 
     @Override
     public boolean hurt(@NotNull DamageSource source, float amount) {
+        // Check if attacker is player with debug stick + sneaking = remove merchant
+        if (source.getEntity() instanceof Player player && player.isShiftKeyDown()) {
+            if (player.getMainHandItem().getItem() instanceof net.fit.cobblemonmerchants.item.custom.MerchantDebugStick) {
+                if (!this.level().isClientSide) {
+                    this.discard();
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("Removed merchant: " + getMerchantDisplayName())
+                        .withStyle(net.minecraft.ChatFormatting.RED));
+                }
+                return true;
+            }
+        }
         // Invincible - cannot be hurt
         return false;
     }
@@ -421,7 +482,16 @@ public class CustomMerchantEntity extends Villager {
 
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag tag) {
-        super.addAdditionalSaveData(tag);
+        // Wrap super call in try-catch to prevent save failures
+        // The Villager parent class may try to save brain/gossip data that isn't properly initialized
+        try {
+            super.addAdditionalSaveData(tag);
+        } catch (Exception e) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.debug(
+                "Villager parent save had issues (expected for custom merchants): {}", e.getMessage());
+            // Continue saving our custom data even if parent save fails
+        }
+
         if (this.traderId != null) {
             tag.putString(TAG_TRADER_ID, this.traderId.toString());
         }
@@ -449,7 +519,15 @@ public class CustomMerchantEntity extends Villager {
 
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag tag) {
-        super.readAdditionalSaveData(tag);
+        // Wrap super call in try-catch to prevent load failures
+        try {
+            super.readAdditionalSaveData(tag);
+        } catch (Exception e) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.debug(
+                "Villager parent load had issues (expected for custom merchants): {}", e.getMessage());
+            // Continue loading our custom data even if parent load fails
+        }
+
         if (tag.contains(TAG_TRADER_ID)) {
             this.traderId = ResourceLocation.parse(tag.getString(TAG_TRADER_ID));
         }
@@ -516,10 +594,175 @@ public class CustomMerchantEntity extends Villager {
             // Filter trades by this merchant's variant
             this.offers = config.toMerchantOffersForVariant(this.variant);
             this.tradeEntries = new java.util.ArrayList<>(config.getTradesForVariant(this.variant));
+
+            // Add daily rotating trades if configured and on server side
+            if (config.dailyRotatingTrades().isPresent() && this.level() instanceof ServerLevel serverLevel) {
+                addDailyRotatingTrades(serverLevel, config.dailyRotatingTrades().get());
+            }
+
             net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Reloaded {} trades for merchant: {} (variant: {})",
                 this.offers.size(), this.traderId, this.variant);
         } else {
             net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn("Config not found for merchant: {}", this.traderId);
+        }
+    }
+
+    /**
+     * Adds daily rotating trades to this merchant's offers.
+     * These trades are dynamically generated based on the current day and pool configuration.
+     */
+    private void addDailyRotatingTrades(ServerLevel level,
+            java.util.List<net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig> rotatingConfigs) {
+
+        net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager manager =
+            net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager.get(level);
+
+        for (net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig config : rotatingConfigs) {
+            // Skip if this rotating trade doesn't apply to this merchant's variant
+            if (!config.appliesToVariant(this.variant)) {
+                continue;
+            }
+
+            try {
+                var selectedTrade = manager.getSelectedTrade(config);
+                if (selectedTrade == null) {
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                        "No trade selected for rotating slot '{}' - pool may be invalid", config.slotId());
+                    continue;
+                }
+
+                // Determine trade type and build trade accordingly
+                String tradeType = config.getEffectiveTradeType();
+                String poolItemId = selectedTrade.itemId();
+                String defaultInputItemId = net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager
+                    .getInputItemForPool(selectedTrade.poolId());
+
+                String actualInputItemId;
+                String actualOutputItemId;
+                int actualInputAmount;
+                int actualOutputAmount;
+
+                if (config.isFree()) {
+                    // FREE: Pool item is output, no cost
+                    // We'll use a special free trade marker instead of a real input item
+                    actualInputItemId = null; // Marker to use createFreeTradeMarker()
+                    actualInputAmount = 0;
+                    actualOutputItemId = poolItemId;
+                    actualOutputAmount = config.outputCount().orElse(selectedTrade.outputAmount());
+                } else if (config.isPoolItemInput()) {
+                    // SELL: Pool item is input (player sells it), receives output
+                    actualInputItemId = poolItemId;
+                    actualInputAmount = config.inputCount().orElse(selectedTrade.outputAmount()); // Pool entry's output becomes input
+                    actualOutputItemId = config.customOutput().orElse(defaultInputItemId);
+                    actualOutputAmount = config.outputCount().orElse(selectedTrade.inputAmount()); // Pool entry's input becomes output
+                } else {
+                    // BUY (default): Pool item is output, player pays input
+                    actualInputItemId = config.customInput().orElse(defaultInputItemId);
+                    actualInputAmount = config.inputCount().orElse(selectedTrade.inputAmount());
+                    actualOutputItemId = config.customOutput().orElse(poolItemId);
+                    actualOutputAmount = config.outputCount().orElse(selectedTrade.outputAmount());
+                }
+
+                // Create input ItemRequirement
+                net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq;
+                if (config.isFree()) {
+                    // Use special free trade marker
+                    inputReq = net.fit.cobblemonmerchants.merchant.config.ItemRequirement.createFreeTradeMarker();
+                } else {
+                    inputReq = net.fit.cobblemonmerchants.merchant.config.ItemRequirement.fromItemId(
+                        actualInputItemId, actualInputAmount);
+                }
+
+                // Create output ItemStack
+                net.minecraft.world.item.ItemStack outputStack = createItemStackFromId(
+                    actualOutputItemId, actualOutputAmount);
+
+                if (outputStack.isEmpty() && !config.isFree()) {
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                        "Failed to create output item for rotating trade: {}", actualOutputItemId);
+                    continue;
+                }
+
+                // For free trades, ensure we have valid output
+                if (config.isFree() && outputStack.isEmpty()) {
+                    outputStack = createItemStackFromId(poolItemId, selectedTrade.outputAmount());
+                    if (outputStack.isEmpty()) {
+                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                            "Failed to create output item for free rotating trade: {}", poolItemId);
+                        continue;
+                    }
+                }
+
+                // Create the MerchantOffer
+                MerchantOffer offer;
+                if (config.isFree()) {
+                    // For free trades, use structure_void with count 1 as the visual cost
+                    // The trade execution checks for count 0 in TradeEntry to skip input validation
+                    offer = new MerchantOffer(
+                        new net.minecraft.world.item.trading.ItemCost(net.minecraft.world.item.Items.STRUCTURE_VOID, 1),
+                        outputStack,
+                        selectedTrade.maxUses(),
+                        0, // villagerXp
+                        0.0f // priceMultiplier
+                    );
+                } else {
+                    offer = new MerchantOffer(
+                        inputReq.toItemCostWithCount(actualInputAmount),
+                        outputStack,
+                        selectedTrade.maxUses(),
+                        0, // villagerXp
+                        0.0f // priceMultiplier
+                    );
+                }
+
+                this.offers.add(offer);
+
+                // Create a synthetic TradeEntry for client sync
+                net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry syntheticEntry =
+                    new net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry(
+                        inputReq,
+                        java.util.Optional.empty(), // no second input
+                        outputStack,
+                        actualOutputAmount,
+                        selectedTrade.maxUses(),
+                        0, // villagerXp
+                        0.0f, // priceMultiplier
+                        java.util.Optional.ofNullable(selectedTrade.displayName()),
+                        config.position(),
+                        java.util.Optional.empty(), // no variant overrides
+                        true, // daily reset
+                        java.util.Optional.empty(), // no variant filter
+                        java.util.Optional.of(config.slotId()) // slot_id for usage tracking
+                    );
+
+                this.tradeEntries.add(syntheticEntry);
+
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "Added daily rotating trade for slot '{}' (type={}): {} x{} for {} x{}, maxUses={}, dailyReset=true",
+                    config.slotId(), tradeType, actualOutputItemId, actualOutputAmount,
+                    actualInputItemId, actualInputAmount, selectedTrade.maxUses());
+
+            } catch (Exception e) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.error(
+                    "Failed to add daily rotating trade for slot '{}'", config.slotId(), e);
+            }
+        }
+    }
+
+    /**
+     * Creates an ItemStack from an item ID string.
+     */
+    private static net.minecraft.world.item.ItemStack createItemStackFromId(String itemId, int count) {
+        try {
+            ResourceLocation itemLoc = ResourceLocation.parse(itemId);
+            net.minecraft.world.item.Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(itemLoc);
+            if (item == null || item == net.minecraft.world.item.Items.AIR) {
+                return net.minecraft.world.item.ItemStack.EMPTY;
+            }
+            return new net.minecraft.world.item.ItemStack(item, count);
+        } catch (Exception e) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn("Failed to parse item ID: {}", itemId);
+            return net.minecraft.world.item.ItemStack.EMPTY;
         }
     }
 

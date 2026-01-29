@@ -12,6 +12,7 @@ A NeoForge mod for Minecraft 1.21.1 that adds a customizable merchant system for
 - **Custom Display Names**: Override item names in trade displays
 - **Flexible Positioning**: Place trades at specific slots in the GUI
 - **Black Market System**: Dynamic rotating inventory with rarity-based pricing
+- **Daily Rotating Trades**: Weighted random trade slots that change daily
 - **Villager Appearances**: Merchants render as villagers with customizable biomes and professions
 
 ## Commands
@@ -406,6 +407,137 @@ The Black Market merchant type has special behavior with dynamic pricing:
 - Per-player unique offers based on UUID
 - Prices calculated from rarity, exclusivity, and craftability
 - Leave `trades` array empty for automatic generation
+
+## Daily Rotating Trades
+
+Add trade slots that randomly select from a weighted pool of items each day. This creates "daily specials" that change at midnight (server time).
+
+### Pool Configuration
+
+Pools are defined in `data/<namespace>/pools/<pool_name>.json`:
+
+```json
+{
+  "description": "Pool of daily special items",
+  "input_item": "cobblemon:relic_coin",
+  "entries": [
+    {
+      "item_id": "cobblemon:rare_candy",
+      "input_amount": 50,
+      "output_amount": 1,
+      "weight": 5,
+      "max_uses": 3,
+      "display_name": "Daily Rare Candy"
+    },
+    {
+      "item_id": "minecraft:diamond",
+      "input_amount": 20,
+      "output_amount": 1,
+      "weight": 15,
+      "input_variance": 0.2
+    },
+    {
+      "item_id": "minecraft:experience_bottle",
+      "input_amount": 8,
+      "output_amount": 3,
+      "weight": 25,
+      "input_variance": 0.1,
+      "output_variance": 0.3
+    }
+  ]
+}
+```
+
+### Pool Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `description` | String | No | - | Documentation for this pool |
+| `input_item` | String | No | `cobblemon:relic_coin` | The currency item for all trades in this pool |
+| `entries` | Array | **Yes** | - | List of possible items to select from |
+
+### Pool Entry Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `item_id` | String | **Yes** | - | The output item ID (e.g., `minecraft:diamond`) |
+| `input_amount` | Integer | **Yes** | - | Base cost in the input currency |
+| `output_amount` | Integer | **Yes** | - | Base output count |
+| `weight` | Integer | No | 1 | Selection weight (higher = more likely) |
+| `input_variance` | Double | No | 0 | Variance for input cost (e.g., 0.2 = +/-20%) |
+| `output_variance` | Double | No | 0 | Variance for output count (e.g., 0.3 = +/-30%) |
+| `max_uses` | Integer | No | Unlimited | Maximum uses per day |
+| `display_name` | String | No | Item name | Custom display name for this trade |
+
+### Adding Rotating Trades to Merchants
+
+Add the `daily_rotating_trades` array to any merchant config:
+
+```json
+{
+  "display_name": "Daily Deals Merchant",
+  "villager_profession": "minecraft:wandering_trader",
+  "trades": [
+    {
+      "input": { "id": "cobblemon:relic_coin", "count": 5 },
+      "output": { "id": "cobblemon:poke_ball", "count": 1 }
+    }
+  ],
+  "daily_rotating_trades": [
+    {
+      "pool": "cobblemoncustommerchants:daily_special",
+      "slot_id": "merchant_daily",
+      "position": 8
+    }
+  ]
+}
+```
+
+### Rotating Trade Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pool` | String | **Yes** | Resource location of the pool (e.g., `cobblemoncustommerchants:daily_special`) |
+| `slot_id` | String | **Yes** | Unique ID for this slot. Merchants with the same slot_id will offer the same daily item. |
+| `position` | Integer | No | Fixed position in the trade GUI (0-26) |
+
+### How It Works
+
+1. **Daily Selection**: At midnight (server time), the system selects a new item from each pool
+2. **Deterministic**: The selection uses the current date and slot_id as a seed, ensuring all players see the same daily item
+3. **Variance**: If configured, the selected item's input/output amounts may vary within the specified range
+4. **Shared Slots**: Multiple merchants can use the same `slot_id` to offer identical daily specials
+5. **Persistence**: Selections are saved to world data and persist across server restarts
+
+## Daily Management Commands
+
+The `/daily` command provides unified management of all daily systems.
+
+### Usage
+
+| Command | Description |
+|---------|-------------|
+| `/daily status` | Show time until reset and server timezone |
+| `/daily refresh trades` | Reroll all daily rotating trades (picks new items) |
+| `/daily refresh trades <merchant>` | Reroll trades for a specific merchant only |
+| `/daily reset rewards` | Reset daily rewards for all players |
+| `/daily reset rewards <player>` | Reset daily rewards for a specific player |
+| `/daily reset trades` | Same as `/daily refresh trades` |
+| `/daily reset trades <merchant>` | Same as `/daily refresh trades <merchant>` |
+| `/daily reset all` | Reset both rewards and trades |
+| `/daily reset all <player>` | Reset rewards for a player (trades are global) |
+
+### Examples
+
+```
+/daily status
+/daily refresh trades
+/daily refresh trades cobblemoncustommerchants:chef
+/daily reset rewards Steve
+/daily reset all
+```
+
+**Note:** Daily rotating trades are global (same for all players), so refreshing them affects everyone. When specifying a merchant, only the slot IDs used by that merchant are rerolled. The `/daily status` command shows the server's timezone and exact time until the next midnight reset.
 
 ## Transaction Ledger
 

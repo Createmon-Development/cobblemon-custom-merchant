@@ -1,0 +1,56 @@
+{
+  "description": "Example pool for daily rotating trade specials",
+  "input_item": "cobblemon:relic_coin",
+  "entries": [
+    {
+      "item_id": "cobblemon:rare_candy",
+      "input_amount": 50,
+      "output_amount": 1,
+      "weight": 5,
+      "max_uses": 3,
+      "display_name": "Daily Rare Candy"
+    },
+    {
+      "item_id": "minecraft:diamond",
+      "input_amount": 20,
+      "output_amount": 1,
+      "weight": 15,
+      "input_variance": 0.2
+    },
+    {
+      "item_id": "minecraft:emerald",
+      "input_amount": 15,
+      "output_amount": 1,
+      "weight": 20,
+      "input_variance": 0.15
+    },
+    {
+      "item_id": "minecraft:golden_apple",
+      "input_amount": 30,
+      "output_amount": 1,
+      "weight": 10,
+      "max_uses": 5
+    },
+    {
+      "item_id": "minecraft:experience_bottle",
+      "input_amount": 8,
+      "output_amount": 3,
+      "weight": 25,
+      "input_variance": 0.1,
+      "output_variance": 0.3
+    },
+    {
+      "item_id": "minecraft:ender_pearl",
+      "input_amount": 12,
+      "output_amount": 2,
+      "weight": 18,
+      "input_variance": 0.15
+    },
+    {
+      "item_id": "minecraft:name_tag",
+      "input_amount": 10,
+      "output_amount": 1,
+      "weight": 7
+    }
+  ]
+}

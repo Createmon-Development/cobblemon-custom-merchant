@@ -39,36 +39,6 @@
         "count": 4
       },
       "output": {
-        "id": "create:scoria",
-        "count": 64
-      }
-    },
-    {
-      "input": {
-        "id": "cobblemon:relic_coin",
-        "count": 4
-      },
-      "output": {
-        "id": "create:scorchia",
-        "count": 64
-      }
-    },
-    {
-      "input": {
-        "id": "cobblemon:relic_coin",
-        "count": 4
-      },
-      "output": {
-        "id": "create:veridium",
-        "count": 64
-      }
-    },
-    {
-      "input": {
-        "id": "cobblemon:relic_coin",
-        "count": 5
-      },
-      "output": {
         "id": "tfmg:raw_lead",
         "count": 16
       }
@@ -76,7 +46,7 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 5
+        "count": 4
       },
       "output": {
         "id": "tfmg:raw_nickel",
@@ -86,7 +56,7 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 5
+        "count": 4
       },
       "output": {
         "id": "tfmg:raw_lithium",
@@ -96,7 +66,7 @@
     {
       "input": {
         "id": "cobblemon:relic_coin",
-        "count": 5
+        "count": 6
       },
       "output": {
         "id": "galosphere:raw_palladium",
@@ -113,6 +83,17 @@
         "count": 16
       },
       "variants": ["housed"]
+    },
+    {
+      "input": {
+        "id": "cobblemon:relic_coin",
+        "count": 12
+      },
+      "output": {
+        "id": "simpletms:tr_rock_smash",
+        "count": 1
+      },
+      "position": 8
     }
   ]
 }
