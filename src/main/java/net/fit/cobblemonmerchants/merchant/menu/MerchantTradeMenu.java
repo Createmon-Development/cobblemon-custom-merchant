@@ -577,8 +577,14 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
 
                 for (ServerPlayer onlinePlayer : player.server.getPlayerList().getPlayers()) {
                     onlinePlayer.sendSystemMessage(message);
-                    // Play ender dragon growl sound to all players
-                    onlinePlayer.playNotifySound(net.minecraft.sounds.SoundEvents.ENDER_DRAGON_GROWL, net.minecraft.sounds.SoundSource.MASTER, 1.0F, 1.0F);
+                    // Play end portal spawn sound globally to all players
+                    onlinePlayer.level().playSound(
+                        null, // null means all players nearby can hear it
+                        onlinePlayer.getX(), onlinePlayer.getY(), onlinePlayer.getZ(),
+                        net.minecraft.sounds.SoundEvents.END_PORTAL_SPAWN,
+                        net.minecraft.sounds.SoundSource.MASTER,
+                        1.0F, 1.0F
+                    );
                 }
 
                 net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
