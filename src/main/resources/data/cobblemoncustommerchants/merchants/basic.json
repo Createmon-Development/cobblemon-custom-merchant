@@ -2,6 +2,7 @@
   "display_name": "Basic Merchant",
   "villager_biome": "minecraft:plains",
   "villager_profession": "cobblemon:nurse",
+  "sync_trades": true,
   "trades": [
     {
       "input": {

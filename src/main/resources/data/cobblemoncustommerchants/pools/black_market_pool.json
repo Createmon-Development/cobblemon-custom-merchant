@@ -1,0 +1,197 @@
+{
+  "description": "Black market trade pool - sell rare items for relic coins",
+  "output_item": "cobblemon:relic_coin",
+  "default_weight": 10,
+  "tables": {
+    "rare_materials": [
+      {
+        "item_id": "minecraft:netherite_scrap",
+        "input_amount": 1,
+        "output_amount": [80, 120],
+        "weight": 3,
+        "max_uses": 2,
+        "display_name": "Smuggled Netherite"
+      },
+      {
+        "item_id": "minecraft:echo_shard",
+        "input_amount": 1,
+        "output_amount": [40, 60],
+        "weight": 5,
+        "max_uses": 3
+      },
+      {
+        "item_id": "minecraft:heart_of_the_sea",
+        "input_amount": 1,
+        "output_amount": [60, 80],
+        "weight": 2,
+        "max_uses": 1,
+        "display_name": "Ocean's Heart"
+      },
+      {
+        "item_id": "minecraft:nether_star",
+        "input_amount": 1,
+        "output_amount": [150, 200],
+        "weight": 1,
+        "max_uses": 1,
+        "display_name": "Stolen Star"
+      },
+      {
+        "item_id": "minecraft:dragon_breath",
+        "input_amount": 1,
+        "output_amount": [25, 35],
+        "weight": 6,
+        "max_uses": 5
+      },
+      {
+        "item_id": "minecraft:phantom_membrane",
+        "input_amount": [2, 4],
+        "output_amount": [15, 25],
+        "weight": 8
+      }
+    ],
+    "enchanted_books": [
+      {
+        "item_id": "minecraft:enchanted_book",
+        "input_amount": 1,
+        "output_amount": [30, 50],
+        "weight": 10,
+        "max_uses": 3,
+        "display_name": "Mystery Enchantment"
+      },
+      {
+        "item_id": "minecraft:experience_bottle",
+        "input_amount": [8, 16],
+        "output_amount": [5, 10],
+        "weight": 15,
+        "max_uses": 5,
+        "display_name": "Bottled Knowledge"
+      }
+    ],
+    "mob_drops": [
+      {
+        "item_id": "minecraft:wither_skeleton_skull",
+        "input_amount": 1,
+        "output_amount": [40, 60],
+        "weight": 4,
+        "max_uses": 2
+      },
+      {
+        "item_id": "minecraft:shulker_shell",
+        "input_amount": [1, 2],
+        "output_amount": [20, 30],
+        "weight": 6,
+        "max_uses": 3
+      },
+      {
+        "item_id": "minecraft:ghast_tear",
+        "input_amount": [1, 3],
+        "output_amount": [15, 25],
+        "weight": 8,
+        "max_uses": 4
+      },
+      {
+        "item_id": "minecraft:blaze_rod",
+        "input_amount": [2, 4],
+        "output_amount": [8, 12],
+        "weight": 12,
+        "max_uses": 5
+      },
+      {
+        "item_id": "minecraft:ender_pearl",
+        "input_amount": [4, 8],
+        "output_amount": [5, 10],
+        "weight": 15
+      },
+      {
+        "item_id": "minecraft:rabbit_foot",
+        "input_amount": [1, 2],
+        "output_amount": [10, 15],
+        "weight": 10,
+        "display_name": "Lucky Charm"
+      }
+    ],
+    "valuables": [
+      {
+        "item_id": "minecraft:emerald_block",
+        "input_amount": 1,
+        "output_amount": [25, 35],
+        "weight": 8,
+        "max_uses": 3
+      },
+      {
+        "item_id": "minecraft:diamond",
+        "input_amount": [1, 3],
+        "output_amount": [8, 12],
+        "weight": 12,
+        "max_uses": 5
+      },
+      {
+        "item_id": "minecraft:gold_block",
+        "input_amount": 1,
+        "output_amount": [15, 20],
+        "weight": 10,
+        "max_uses": 4
+      },
+      {
+        "item_id": "minecraft:lapis_block",
+        "input_amount": [1, 2],
+        "output_amount": [8, 12],
+        "weight": 15
+      },
+      {
+        "item_id": "minecraft:amethyst_shard",
+        "input_amount": [8, 16],
+        "output_amount": [3, 6],
+        "weight": 12
+      }
+    ],
+    "cobblemon_items": [
+      {
+        "item_id": "cobblemon:rare_candy",
+        "input_amount": 1,
+        "output_amount": [25, 40],
+        "weight": 5,
+        "max_uses": 3,
+        "display_name": "Contraband Candy"
+      },
+      {
+        "item_id": "cobblemon:exp_candy_xl",
+        "input_amount": [1, 2],
+        "output_amount": [15, 25],
+        "weight": 8,
+        "max_uses": 4
+      },
+      {
+        "item_id": "cobblemon:ability_capsule",
+        "input_amount": 1,
+        "output_amount": [50, 80],
+        "weight": 3,
+        "max_uses": 2,
+        "display_name": "Ability Modifier"
+      },
+      {
+        "item_id": "cobblemon:masterball",
+        "input_amount": 1,
+        "output_amount": [200, 300],
+        "weight": 1,
+        "max_uses": 1,
+        "display_name": "Ultimate Capture Device"
+      },
+      {
+        "item_id": "cobblemon:bottle_cap",
+        "input_amount": 1,
+        "output_amount": [30, 50],
+        "weight": 6,
+        "max_uses": 3
+      },
+      {
+        "item_id": "cobblemon:gold_bottle_cap",
+        "input_amount": 1,
+        "output_amount": [100, 150],
+        "weight": 2,
+        "max_uses": 1,
+        "display_name": "Golden Cap"
+      }
+    ]
+  }
+}

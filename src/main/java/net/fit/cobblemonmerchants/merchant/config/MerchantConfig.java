@@ -23,26 +23,57 @@ public record MerchantConfig(
     Optional<String> villagerBiome,
     Optional<String> villagerProfession,
     List<TradeEntry> trades,
-    Optional<BlackMarketConfigData> blackMarketConfig,
     Optional<DailyRewardConfig> dailyRewardConfig,
     Optional<List<DailyRotatingTradeConfig>> dailyRotatingTrades,
     Optional<String> actionId,
-    boolean actionBeforeTrade
+    boolean actionBeforeTrade,
+    Optional<Map<String, VariantBonusConfig>> variantBonuses,
+    int resetTimerPosition, // Position for the reset timer clock display (default: 26 = bottom right)
+    boolean syncTrades // If true (default), all merchants of this type share the same trade selections.
+                       // If false, each merchant entity has unique rolls, lucky trades, and usage tracking.
 ) {
+    public static final int DEFAULT_RESET_TIMER_POSITION = 26;
+
     public static final Codec<MerchantConfig> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             Codec.STRING.fieldOf("display_name").forGetter(MerchantConfig::displayName),
             Codec.STRING.optionalFieldOf("player_skin_name").forGetter(MerchantConfig::playerSkinName),
             Codec.STRING.optionalFieldOf("villager_biome").forGetter(MerchantConfig::villagerBiome),
             Codec.STRING.optionalFieldOf("villager_profession").forGetter(MerchantConfig::villagerProfession),
-            TradeEntry.CODEC.listOf().fieldOf("trades").forGetter(MerchantConfig::trades),
-            BlackMarketConfigData.CODEC.optionalFieldOf("black_market_config").forGetter(MerchantConfig::blackMarketConfig),
+            TradeEntry.CODEC.listOf().optionalFieldOf("trades", List.of()).forGetter(MerchantConfig::trades),
             DailyRewardConfig.CODEC.optionalFieldOf("daily_reward").forGetter(MerchantConfig::dailyRewardConfig),
             DailyRotatingTradeConfig.CODEC.listOf().optionalFieldOf("daily_rotating_trades").forGetter(MerchantConfig::dailyRotatingTrades),
             Codec.STRING.optionalFieldOf("action_id").forGetter(MerchantConfig::actionId),
-            Codec.BOOL.optionalFieldOf("action_before_trade", false).forGetter(MerchantConfig::actionBeforeTrade)
+            Codec.BOOL.optionalFieldOf("action_before_trade", false).forGetter(MerchantConfig::actionBeforeTrade),
+            Codec.unboundedMap(Codec.STRING, VariantBonusConfig.CODEC).optionalFieldOf("variant_bonuses").forGetter(MerchantConfig::variantBonuses),
+            Codec.INT.optionalFieldOf("reset_timer_position", DEFAULT_RESET_TIMER_POSITION).forGetter(MerchantConfig::resetTimerPosition),
+            Codec.BOOL.optionalFieldOf("sync_trades", true).forGetter(MerchantConfig::syncTrades)
         ).apply(instance, MerchantConfig::new)
     );
+
+    /**
+     * Gets the variant bonus config for a specific variant.
+     *
+     * @param variant The variant name (e.g., "housed")
+     * @return The bonus config, or null if none configured
+     */
+    public VariantBonusConfig getVariantBonus(String variant) {
+        if (variantBonuses.isEmpty()) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "getVariantBonus: variantBonuses is empty for merchant '{}'", displayName);
+            return null;
+        }
+        if (variant == null) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "getVariantBonus: variant is null for merchant '{}'", displayName);
+            return null;
+        }
+        VariantBonusConfig result = variantBonuses.get().get(variant);
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "getVariantBonus: merchant='{}', variant='{}', availableKeys={}, found={}",
+            displayName, variant, variantBonuses.get().keySet(), result != null);
+        return result;
+    }
 
     /**
      * Converts this config into MerchantOffers (all trades, no variant filtering)
@@ -178,6 +209,9 @@ public record MerchantConfig(
      *                    This allows trades with output counts > 64.
      * @param slotId Optional slot ID for daily rotating trades. Used to track usage independently
      *               of trade index so that refreshing daily rotating trades resets usage properly.
+     * @param isLucky Whether this trade is a "lucky" trade with enhanced rewards (client display only).
+     * @param luckyOutputMultiplier The output multiplier applied to lucky trades (for tooltip display).
+     * @param luckyMaxUsesMultiplier The max uses multiplier applied to lucky trades (for tooltip display).
      */
     public record TradeEntry(
         ItemRequirement input,
@@ -192,7 +226,10 @@ public record MerchantConfig(
         Optional<Map<String, TradeVariantOverride>> variantOverrides,
         boolean dailyReset,
         Optional<List<String>> variants,
-        Optional<String> slotId
+        Optional<String> slotId,
+        boolean isLucky,
+        double luckyOutputMultiplier,
+        double luckyMaxUsesMultiplier
     ) {
         /**
          * A lenient ItemStack codec that falls back to a barrier item if parsing fails.
@@ -242,12 +279,17 @@ public record MerchantConfig(
                     .optionalFieldOf("variant_overrides").forGetter(TradeEntry::variantOverrides),
                 Codec.BOOL.optionalFieldOf("daily_reset", false).forGetter(TradeEntry::dailyReset),
                 Codec.STRING.listOf().optionalFieldOf("variants").forGetter(TradeEntry::variants),
-                Codec.STRING.optionalFieldOf("slot_id").forGetter(TradeEntry::slotId)
+                Codec.STRING.optionalFieldOf("slot_id").forGetter(TradeEntry::slotId),
+                // Lucky trade fields are not parsed from JSON - they're set programmatically for daily rotating trades
+                Codec.BOOL.optionalFieldOf("is_lucky", false).forGetter(TradeEntry::isLucky),
+                Codec.DOUBLE.optionalFieldOf("lucky_output_multiplier", 1.0).forGetter(TradeEntry::luckyOutputMultiplier),
+                Codec.DOUBLE.optionalFieldOf("lucky_max_uses_multiplier", 1.0).forGetter(TradeEntry::luckyMaxUsesMultiplier)
             ).apply(instance, (input, secondInput, outputWithCount, maxUses, villagerXp, priceMultiplier,
-                               tradeDisplayName, position, variantOverrides, dailyReset, variants, slotId) ->
+                               tradeDisplayName, position, variantOverrides, dailyReset, variants, slotId,
+                               isLucky, luckyOutputMultiplier, luckyMaxUsesMultiplier) ->
                 new TradeEntry(input, secondInput, outputWithCount.stack(), outputWithCount.count(),
                     maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
-                    variantOverrides, dailyReset, variants, slotId))
+                    variantOverrides, dailyReset, variants, slotId, isLucky, luckyOutputMultiplier, luckyMaxUsesMultiplier))
         );
 
         /**
@@ -411,159 +453,6 @@ public record MerchantConfig(
     }
 
     /**
-     * Black Market configuration data loaded from JSON
-     * Simplified to stay within codec parameter limits
-     */
-    public record BlackMarketConfigData(
-        int rotationDays,
-        int minecraftItemsCount,
-        int cobblemonItemsCount,
-        double globalPriceMultiplier,
-        double cobblemonExclusiveMultiplier,
-        double heldItemMultiplier,
-        TradeUsesConfig tradeUsesConfig,
-        VariabilityConfig variabilityConfig,
-        Map<String, Double> gameplayModifiers,
-        LuckyTradeConfig luckyTradeConfig,
-        LowCostTradeConfig lowCostTradeConfig,
-        ValueCappingConfig valueCappingConfig,
-        List<String> excludedMods
-    ) {
-        public static final Codec<BlackMarketConfigData> CODEC = RecordCodecBuilder.create(instance ->
-            instance.group(
-                Codec.INT.optionalFieldOf("rotation_days", 14).forGetter(BlackMarketConfigData::rotationDays),
-                Codec.INT.optionalFieldOf("minecraft_items_count", 3).forGetter(BlackMarketConfigData::minecraftItemsCount),
-                Codec.INT.optionalFieldOf("cobblemon_items_count", 1).forGetter(BlackMarketConfigData::cobblemonItemsCount),
-                Codec.DOUBLE.optionalFieldOf("global_price_multiplier", 1.0).forGetter(BlackMarketConfigData::globalPriceMultiplier),
-                Codec.DOUBLE.optionalFieldOf("cobblemon_exclusive_multiplier", 1.5).forGetter(BlackMarketConfigData::cobblemonExclusiveMultiplier),
-                Codec.DOUBLE.optionalFieldOf("held_item_multiplier", 1.3).forGetter(BlackMarketConfigData::heldItemMultiplier),
-                TradeUsesConfig.CODEC.optionalFieldOf("trade_uses_config", new TradeUsesConfig(1, 3, 10, 10.0)).forGetter(BlackMarketConfigData::tradeUsesConfig),
-                VariabilityConfig.CODEC.optionalFieldOf("variability_config", new VariabilityConfig(0.6, 1.2, 0.7, 1.3, 0.7, 1.3)).forGetter(BlackMarketConfigData::variabilityConfig),
-                Codec.unboundedMap(Codec.STRING, Codec.DOUBLE).optionalFieldOf("gameplay_modifiers", Map.of()).forGetter(BlackMarketConfigData::gameplayModifiers),
-                LuckyTradeConfig.CODEC.optionalFieldOf("lucky_trade_config", new LuckyTradeConfig(true, 0.01, 1.5, 2.0)).forGetter(BlackMarketConfigData::luckyTradeConfig),
-                LowCostTradeConfig.CODEC.optionalFieldOf("low_cost_trade_config", new LowCostTradeConfig(3, 1, 5)).forGetter(BlackMarketConfigData::lowCostTradeConfig),
-                ValueCappingConfig.CODEC.optionalFieldOf("value_capping_config", new ValueCappingConfig(true, 0.5, true, 10)).forGetter(BlackMarketConfigData::valueCappingConfig),
-                Codec.STRING.listOf().optionalFieldOf("excluded_mods", List.of()).forGetter(BlackMarketConfigData::excludedMods)
-            ).apply(instance, BlackMarketConfigData::new)
-        );
-
-        // Helper methods for backward compatibility
-        public int minTradeUses() { return tradeUsesConfig.min(); }
-        public int baseTradeUses() { return tradeUsesConfig.base(); }
-        public int maxTradeUses() { return tradeUsesConfig.max(); }
-        public double tradeUseThreshold() { return tradeUsesConfig.threshold(); }
-        public double minPriceVariability() { return variabilityConfig.minPrice(); }
-        public double maxPriceVariability() { return variabilityConfig.maxPrice(); }
-        public double minCountVariability() { return variabilityConfig.minCount(); }
-        public double maxCountVariability() { return variabilityConfig.maxCount(); }
-        public double minTradeUseVariability() { return variabilityConfig.minTradeUse(); }
-        public double maxTradeUseVariability() { return variabilityConfig.maxTradeUse(); }
-        public boolean luckyTradesEnabled() { return luckyTradeConfig.enabled(); }
-        public double luckyTradeChance() { return luckyTradeConfig.chance(); }
-        public double luckyTradePriceMultiplier() { return luckyTradeConfig.priceMultiplier(); }
-        public double luckyTradeUsesMultiplier() { return luckyTradeConfig.tradeUsesMultiplier(); }
-        public int lowCostMultiItemThreshold() { return lowCostTradeConfig.multiItemThreshold(); }
-        public int minSingleRcPrice() { return lowCostTradeConfig.minPrice(); }
-        public int maxSingleRcPrice() { return lowCostTradeConfig.maxPrice(); }
-        public boolean outlierDetectionEnabled() { return valueCappingConfig.outlierDetectionEnabled(); }
-        public double outlierPenaltyMultiplier() { return valueCappingConfig.outlierPenalty(); }
-        public boolean craftingRecipeCheckEnabled() { return valueCappingConfig.craftingCheckEnabled(); }
-        public int craftableItemMaxValue() { return valueCappingConfig.craftableMaxValue(); }
-    }
-
-    /**
-     * Trade uses configuration sub-group
-     */
-    public record TradeUsesConfig(int min, int base, int max, double threshold) {
-        public static final Codec<TradeUsesConfig> CODEC = RecordCodecBuilder.create(instance ->
-            instance.group(
-                Codec.INT.fieldOf("min").forGetter(TradeUsesConfig::min),
-                Codec.INT.fieldOf("base").forGetter(TradeUsesConfig::base),
-                Codec.INT.fieldOf("max").forGetter(TradeUsesConfig::max),
-                Codec.DOUBLE.fieldOf("threshold").forGetter(TradeUsesConfig::threshold)
-            ).apply(instance, TradeUsesConfig::new)
-        );
-    }
-
-    /**
-     * Variability configuration sub-group
-     */
-    public record VariabilityConfig(
-        double minPrice,
-        double maxPrice,
-        double minCount,
-        double maxCount,
-        double minTradeUse,
-        double maxTradeUse
-    ) {
-        public static final Codec<VariabilityConfig> CODEC = RecordCodecBuilder.create(instance ->
-            instance.group(
-                Codec.DOUBLE.fieldOf("min_price").forGetter(VariabilityConfig::minPrice),
-                Codec.DOUBLE.fieldOf("max_price").forGetter(VariabilityConfig::maxPrice),
-                Codec.DOUBLE.fieldOf("min_count").forGetter(VariabilityConfig::minCount),
-                Codec.DOUBLE.fieldOf("max_count").forGetter(VariabilityConfig::maxCount),
-                Codec.DOUBLE.fieldOf("min_trade_use").forGetter(VariabilityConfig::minTradeUse),
-                Codec.DOUBLE.fieldOf("max_trade_use").forGetter(VariabilityConfig::maxTradeUse)
-            ).apply(instance, VariabilityConfig::new)
-        );
-    }
-
-    /**
-     * Lucky trade configuration sub-group
-     */
-    public record LuckyTradeConfig(
-        boolean enabled,
-        double chance,
-        double priceMultiplier,
-        double tradeUsesMultiplier
-    ) {
-        public static final Codec<LuckyTradeConfig> CODEC = RecordCodecBuilder.create(instance ->
-            instance.group(
-                Codec.BOOL.fieldOf("enabled").forGetter(LuckyTradeConfig::enabled),
-                Codec.DOUBLE.fieldOf("chance").forGetter(LuckyTradeConfig::chance),
-                Codec.DOUBLE.fieldOf("price_multiplier").forGetter(LuckyTradeConfig::priceMultiplier),
-                Codec.DOUBLE.fieldOf("trade_uses_multiplier").forGetter(LuckyTradeConfig::tradeUsesMultiplier)
-            ).apply(instance, LuckyTradeConfig::new)
-        );
-    }
-
-    /**
-     * Low cost trade configuration sub-group
-     */
-    public record LowCostTradeConfig(
-        int multiItemThreshold,
-        int minPrice,
-        int maxPrice
-    ) {
-        public static final Codec<LowCostTradeConfig> CODEC = RecordCodecBuilder.create(instance ->
-            instance.group(
-                Codec.INT.fieldOf("multi_item_threshold").forGetter(LowCostTradeConfig::multiItemThreshold),
-                Codec.INT.fieldOf("min_price").forGetter(LowCostTradeConfig::minPrice),
-                Codec.INT.fieldOf("max_price").forGetter(LowCostTradeConfig::maxPrice)
-            ).apply(instance, LowCostTradeConfig::new)
-        );
-    }
-
-    /**
-     * Value capping configuration sub-group
-     */
-    public record ValueCappingConfig(
-        boolean outlierDetectionEnabled,
-        double outlierPenalty,
-        boolean craftingCheckEnabled,
-        int craftableMaxValue
-    ) {
-        public static final Codec<ValueCappingConfig> CODEC = RecordCodecBuilder.create(instance ->
-            instance.group(
-                Codec.BOOL.fieldOf("outlier_detection_enabled").forGetter(ValueCappingConfig::outlierDetectionEnabled),
-                Codec.DOUBLE.fieldOf("outlier_penalty_multiplier").forGetter(ValueCappingConfig::outlierPenalty),
-                Codec.BOOL.fieldOf("crafting_check_enabled").forGetter(ValueCappingConfig::craftingCheckEnabled),
-                Codec.INT.fieldOf("craftable_max_value").forGetter(ValueCappingConfig::craftableMaxValue)
-            ).apply(instance, ValueCappingConfig::new)
-        );
-    }
-
-    /**
      * Daily reward configuration for merchants that give free items once per day.
      * Supports variants where different spawned versions of the same merchant
      * can give different rewards.
@@ -624,6 +513,115 @@ public record MerchantConfig(
                 return minCount;
             }
             return minCount + random.nextInt(maxCount - minCount + 1);
+        }
+    }
+
+    /**
+     * Configuration for variant-specific bonuses that affect daily rotating trades.
+     * Applied when a merchant has a specific variant (e.g., "housed").
+     *
+     * @param extraTrades Map of pool ID (or table reference) -> extra trades to add from that pool
+     * @param outputMultiplier Multiplier for output amounts (1.0 = no change, 1.5 = 50% more)
+     * @param luckyTradeConfig Configuration for "lucky" trades with enhanced rewards
+     */
+    public record VariantBonusConfig(
+        Optional<Map<String, Integer>> extraTrades,
+        double outputMultiplier,
+        VariantLuckyTradeConfig luckyTradeConfig
+    ) {
+        public static final Codec<VariantBonusConfig> CODEC = RecordCodecBuilder.create(instance ->
+            instance.group(
+                Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("extra_trades").forGetter(VariantBonusConfig::extraTrades),
+                Codec.DOUBLE.optionalFieldOf("output_multiplier", 1.0).forGetter(VariantBonusConfig::outputMultiplier),
+                VariantLuckyTradeConfig.CODEC.optionalFieldOf("lucky_trades", VariantLuckyTradeConfig.DISABLED).forGetter(VariantBonusConfig::luckyTradeConfig)
+            ).apply(instance, VariantBonusConfig::new)
+        );
+
+        /**
+         * Gets the extra trade count for a specific pool.
+         *
+         * @param poolId The pool ID (with optional table reference, e.g., "mod:pool.table")
+         * @return The number of extra trades, or 0 if none configured
+         */
+        public int getExtraTradesForPool(String poolId) {
+            if (extraTrades.isEmpty()) {
+                return 0;
+            }
+            return extraTrades.get().getOrDefault(poolId, 0);
+        }
+
+        /**
+         * Applies the output multiplier to a base amount.
+         *
+         * @param baseAmount The base output amount
+         * @return The multiplied amount (minimum 1)
+         */
+        public int applyOutputMultiplier(int baseAmount) {
+            return Math.max(1, (int) Math.round(baseAmount * outputMultiplier));
+        }
+    }
+
+    /**
+     * Configuration for lucky trades within a variant bonus.
+     * Lucky trades have a chance to spawn with enhanced rewards.
+     *
+     * @param chance Probability (0.0 to 1.0) that a trade will be "lucky"
+     * @param maxUsesMultiplier Multiplier for max uses on lucky trades (1.0 = no change)
+     * @param outputMultiplier Additional multiplier for output on lucky trades (stacks with variant bonus)
+     */
+    public record VariantLuckyTradeConfig(
+        double chance,
+        double maxUsesMultiplier,
+        double outputMultiplier
+    ) {
+        public static final VariantLuckyTradeConfig DISABLED = new VariantLuckyTradeConfig(0.0, 1.0, 1.0);
+
+        public static final Codec<VariantLuckyTradeConfig> CODEC = RecordCodecBuilder.create(instance ->
+            instance.group(
+                Codec.DOUBLE.optionalFieldOf("chance", 0.0).forGetter(VariantLuckyTradeConfig::chance),
+                Codec.DOUBLE.optionalFieldOf("max_uses_multiplier", 1.0).forGetter(VariantLuckyTradeConfig::maxUsesMultiplier),
+                Codec.DOUBLE.optionalFieldOf("output_multiplier", 1.0).forGetter(VariantLuckyTradeConfig::outputMultiplier)
+            ).apply(instance, VariantLuckyTradeConfig::new)
+        );
+
+        /**
+         * Checks if lucky trades are enabled (chance > 0).
+         */
+        public boolean isEnabled() {
+            return chance > 0.0;
+        }
+
+        /**
+         * Rolls to determine if a trade should be lucky.
+         *
+         * @param random The random source
+         * @return true if this trade should be lucky
+         */
+        public boolean rollLucky(java.util.Random random) {
+            return random.nextDouble() < chance;
+        }
+
+        /**
+         * Applies the max uses multiplier.
+         *
+         * @param baseMaxUses The base max uses
+         * @return The multiplied max uses (minimum 1)
+         */
+        public int applyMaxUsesMultiplier(int baseMaxUses) {
+            if (baseMaxUses == Integer.MAX_VALUE) {
+                return baseMaxUses; // Don't modify unlimited trades
+            }
+            return Math.max(1, (int) Math.round(baseMaxUses * maxUsesMultiplier));
+        }
+
+        /**
+         * Applies the output multiplier.
+         *
+         * @param baseAmount The base output amount
+         * @return The multiplied amount (minimum 1)
+         */
+        public int applyOutputMultiplier(int baseAmount) {
+            return Math.max(1, (int) Math.round(baseAmount * outputMultiplier));
         }
     }
 }

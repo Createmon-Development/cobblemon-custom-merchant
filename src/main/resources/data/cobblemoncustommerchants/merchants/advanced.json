@@ -2,6 +2,7 @@
   "display_name": "Advanced Merchant",
   "villager_biome": "minecraft:snow",
   "villager_profession": "cobblemon:nurse",
+  "sync_trades": true,
   "trades": [
     {
       "input": {

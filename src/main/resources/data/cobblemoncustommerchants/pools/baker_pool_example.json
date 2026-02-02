@@ -1,0 +1,83 @@
+{
+  "description": "Example pool for a baker merchant - demonstrates named sub-pools (tables), sell pools, and default_weight",
+  "output_item": "cobblemon:relic_coin",
+  "default_weight": 10,
+  "tables": {
+    "baked_goods": [
+      {
+        "item_id": "minecraft:cake",
+        "input_amount": 1,
+        "output_amount": 8,
+        "weight": 5,
+        "max_uses": 3,
+        "display_name": "Fresh Cake"
+      },
+      {
+        "item_id": "minecraft:pumpkin_pie",
+        "input_amount": [1, 2],
+        "output_amount": [4, 6]
+      },
+      {
+        "item_id": "minecraft:cookie",
+        "input_amount": [4, 8],
+        "output_amount": [8, 12]
+      },
+      {
+        "item_id": "minecraft:bread",
+        "input_amount": [2, 4],
+        "output_amount": 1
+      }
+    ],
+    "sweet_treats": [
+      {
+        "item_id": "minecraft:golden_apple",
+        "input_amount": 1,
+        "output_amount": [30, 40],
+        "weight": 2,
+        "max_uses": 1,
+        "display_name": "Golden Delicacy"
+      },
+      {
+        "item_id": "minecraft:honey_bottle",
+        "input_amount": 1,
+        "output_amount": [5, 8]
+      },
+      {
+        "item_id": "minecraft:sweet_berries",
+        "input_amount": [6, 12],
+        "output_amount": 3
+      },
+      {
+        "item_id": "minecraft:glow_berries",
+        "input_amount": [4, 8],
+        "output_amount": [4, 6],
+        "display_name": "Glowing Berries"
+      }
+    ],
+    "drinks": [
+      {
+        "item_id": "minecraft:milk_bucket",
+        "input_amount": 1,
+        "output_amount": [2, 4]
+      },
+      {
+        "item_id": "minecraft:honey_bottle",
+        "input_amount": 1,
+        "output_amount": [3, 5],
+        "display_name": "Fresh Honey"
+      },
+      {
+        "item_id": "minecraft:potion",
+        "input_amount": 1,
+        "output_amount": [3, 5],
+        "display_name": "Herbal Tea"
+      },
+      {
+        "item_id": "minecraft:mushroom_stew",
+        "input_amount": 1,
+        "output_amount": [2, 4],
+        "display_name": "Warm Soup"
+      }
+    ]
+  }
+}

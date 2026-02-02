@@ -2,43 +2,36 @@
   "display_name": "Pastry Chef",
   "villager_biome": "minecraft:plains",
   "villager_profession": "minecraft:librarian",
-  "trades": [
-    {
-      "input": {
-        "id": "extradelight:sugar_cookie_villager",
-        "count": 3
-      },
-      "output": {
-        "id": "cobblemon:relic_coin",
-        "count": 5
-      }
-    },
-    {
-      "input": {
-        "id": "cobblemon:poke_cake",
-        "count": 1
-      },
-      "output": {
-        "id": "cobblemon:relic_coin",
-        "count": 8
-      }
-    },
-    {
-      "input": {
-        "id": "createfood:chorus_fruit_cream_white_chocolate",
-        "count": 1
-      },
-      "output": {
-        "id": "cobblemon:relic_coin",
-        "count": 12
-      }
-    }
-  ],
+  "sync_trades": false,
   "daily_rotating_trades": [
     {
-      "pool": "cobblemoncustommerchants:daily_special",
-      "slot_id": "chef_daily",
-      "position": 8
+      "pool": "cobblemoncustommerchants:baker_pool_example.baked_goods",
+      "slot_id": "chef_baked",
+      "count": 3
+    },
+    {
+      "pool": "cobblemoncustommerchants:baker_pool_example.sweet_treats",
+      "slot_id": "chef_sweets",
+      "count": 3
+    },
+    {
+      "pool": "cobblemoncustommerchants:baker_pool_example.drinks",
+      "slot_id": "chef_drinks",
+      "count": 3
     }
-  ]
+  ],
+  "variant_bonuses": {
+    "housed": {
+      "extra_trades": {
+        "cobblemoncustommerchants:baker_pool_example.baked_goods": 1,
+        "cobblemoncustommerchants:baker_pool_example.sweet_treats": 1
+      },
+      "output_multiplier": 1.25,
+      "lucky_trades": {
+        "chance": 0.10,
+        "max_uses_multiplier": 2.0,
+        "output_multiplier": 1.5
+      }
+    }
+  }
 }

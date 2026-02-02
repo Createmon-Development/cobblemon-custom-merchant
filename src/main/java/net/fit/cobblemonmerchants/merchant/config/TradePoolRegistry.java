@@ -12,6 +12,7 @@ import net.minecraft.util.profiling.ProfilerFiller;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -81,8 +82,16 @@ public class TradePoolRegistry extends SimpleJsonResourceReloadListener {
 
                 TradePool pool = result.result().get();
                 pools.put(id, pool);
-                CobblemonMerchants.LOGGER.info("Loaded trade pool: {} with {} entries (total weight: {})",
-                    id, pool.entries().size(), pool.getTotalWeight());
+
+                // Log pool info with tables if present
+                if (pool.hasTables()) {
+                    int totalEntries = pool.tables().get().values().stream().mapToInt(List::size).sum();
+                    CobblemonMerchants.LOGGER.info("Loaded trade pool: {} with {} tables ({} total entries): {}",
+                        id, pool.tables().get().size(), totalEntries, pool.getTableNames());
+                } else {
+                    CobblemonMerchants.LOGGER.info("Loaded trade pool: {} with {} entries (total weight: {})",
+                        id, pool.entries().size(), pool.getTotalWeight());
+                }
 
             } catch (Exception e) {
                 CobblemonMerchants.LOGGER.error("Failed to load trade pool: {}", id, e);
@@ -106,16 +115,57 @@ public class TradePoolRegistry extends SimpleJsonResourceReloadListener {
     }
 
     /**
-     * Gets a trade pool by its string ID
+     * Gets a trade pool by its string ID.
+     * Supports dot notation for named sub-pools: "namespace:pool_name.table_name"
+     * Examples:
+     *   - "cobblemoncustommerchants:rare_items" - returns the whole pool
+     *   - "cobblemoncustommerchants:baker.bakery" - returns the "bakery" table from the "baker" pool
      *
-     * @param id The pool ID string (e.g., "cobblemoncustommerchants:rare_items")
-     * @return The trade pool, or null if not found
+     * @param id The pool ID string, optionally with table name after a dot
+     * @return The trade pool (or sub-pool), or null if not found
      */
     public static TradePool getPool(String id) {
         try {
-            return getPool(ResourceLocation.parse(id));
+            // Check for dot notation: "namespace:pool_name.table_name"
+            int colonIndex = id.indexOf(':');
+            if (colonIndex == -1) {
+                // No namespace, try parsing directly
+                return getPool(ResourceLocation.parse(id));
+            }
+
+            String namespace = id.substring(0, colonIndex);
+            String pathPart = id.substring(colonIndex + 1);
+
+            // Check if there's a dot in the path (indicating table name)
+            int dotIndex = pathPart.indexOf('.');
+            if (dotIndex == -1) {
+                // No table name, return the whole pool
+                return getPool(ResourceLocation.parse(id));
+            }
+
+            // Extract pool name and table name
+            String poolName = pathPart.substring(0, dotIndex);
+            String tableName = pathPart.substring(dotIndex + 1);
+
+            // Get the base pool
+            ResourceLocation poolId = ResourceLocation.fromNamespaceAndPath(namespace, poolName);
+            TradePool basePool = getPool(poolId);
+            if (basePool == null) {
+                CobblemonMerchants.LOGGER.warn("Base pool not found for sub-pool reference: {}", id);
+                return null;
+            }
+
+            // Get the sub-pool by table name
+            TradePool subPool = basePool.getSubPool(tableName);
+            if (subPool == null) {
+                CobblemonMerchants.LOGGER.warn("Table '{}' not found in pool '{}'. Available tables: {}",
+                    tableName, poolId, basePool.getTableNames());
+                return null;
+            }
+
+            return subPool;
         } catch (Exception e) {
-            CobblemonMerchants.LOGGER.warn("Invalid pool ID format: {}", id);
+            CobblemonMerchants.LOGGER.warn("Invalid pool ID format: {}", id, e);
             return null;
         }
     }

@@ -2,6 +2,7 @@
   "display_name": "Unhumble Miner Merchant",
   "villager_biome": "minecraft:taiga",
   "villager_profession": "minecraft:weaponsmith",
+  "sync_trades": true,
   "trades": [
     {
       "input": {
@@ -90,7 +91,7 @@
         "count": 12
       },
       "output": {
-        "id": "simpletms:tr_rock_smash",
+        "id": "simpletms:tr_rocksmash",
         "count": 1
       },
       "position": 8

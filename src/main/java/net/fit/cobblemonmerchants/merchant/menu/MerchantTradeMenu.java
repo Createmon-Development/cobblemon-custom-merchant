@@ -41,6 +41,7 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     private int dailyRewardMaxCount = 1;
     private boolean dailyRewardSharedCooldown = true;
     private java.util.UUID merchantEntityUUID = null;
+    private int resetTimerPosition = net.fit.cobblemonmerchants.merchant.config.MerchantConfig.DEFAULT_RESET_TIMER_POSITION;
 
     // Constructor for client side
     public MerchantTradeMenu(int containerId, Inventory playerInventory, FriendlyByteBuf extraData) {
@@ -64,17 +65,31 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             float priceMultiplier = extraData.readFloat();
             java.util.Optional<String> tradeDisplayName = extraData.readBoolean() ? java.util.Optional.of(extraData.readUtf()) : java.util.Optional.empty();
             java.util.Optional<Integer> position = extraData.readBoolean() ? java.util.Optional.of(extraData.readInt()) : java.util.Optional.empty();
+            // Lucky trade info for client display
+            boolean isLucky = extraData.readBoolean();
+            double luckyOutputMultiplier = extraData.readDouble();
+            double luckyMaxUsesMultiplier = extraData.readDouble();
+
+            // Log lucky status for ALL trades (for debugging)
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "CLIENT: Trade {} received - isLucky={}, outputMult={}, maxUsesMult={}",
+                i, isLucky, luckyOutputMultiplier, luckyMaxUsesMultiplier);
 
             this.tradeEntries.add(new net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry(
                 input, secondInput, output, outputCount, maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
                 java.util.Optional.empty(), // variantOverrides not needed client-side
                 false, // dailyReset not needed client-side
                 java.util.Optional.empty(), // variants not needed client-side
-                java.util.Optional.empty() // slotId not needed client-side
+                java.util.Optional.empty(), // slotId not needed client-side
+                isLucky, // lucky trade flag
+                luckyOutputMultiplier, // lucky output multiplier for tooltip
+                luckyMaxUsesMultiplier // lucky max uses multiplier for tooltip
             ));
         }
 
-        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Received {} trade entries from server", this.tradeEntries.size());
+        // Count lucky trades for debugging
+        long luckyCount = this.tradeEntries.stream().filter(e -> e.isLucky()).count();
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Received {} trade entries from server ({} lucky)", this.tradeEntries.size(), luckyCount);
 
         // Read daily reward display info
         this.hasDailyRewardDisplay = extraData.readBoolean();
@@ -91,6 +106,18 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             this.merchantEntityUUID = extraData.readUUID();
             net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("CLIENT: Daily reward at position {}, claimed: {}, reset in: {}ms ({}), count: {}-{}, sharedCooldown: {}",
                 this.dailyRewardPosition, this.dailyRewardClaimed, this.initialResetMillis, this.timeUntilReset, this.dailyRewardMinCount, this.dailyRewardMaxCount, this.dailyRewardSharedCooldown);
+        }
+
+        // Read reset timer position from config
+        this.resetTimerPosition = extraData.readInt();
+
+        // Read reset timer countdown (always sent, even if no daily reward)
+        long resetMillis = extraData.readLong();
+        // Only set if we don't already have it from daily reward
+        if (this.initialResetMillis == 0) {
+            this.initialResetMillis = resetMillis;
+            this.menuOpenedTime = System.currentTimeMillis();
+            this.timeUntilReset = formatMillisToTime(resetMillis);
         }
 
         // Try to get the merchant from the world
@@ -266,6 +293,14 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     }
 
     /**
+     * Gets the position for the reset timer clock display.
+     * Defaults to 26 (bottom right) if not configured.
+     */
+    public int getResetTimerPosition() {
+        return resetTimerPosition;
+    }
+
+    /**
      * Sets the daily reward as claimed (called after successful claim)
      */
     public void setDailyRewardClaimed(boolean claimed) {
@@ -345,7 +380,7 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             tradeIndex < tradeEntries.size() ? tradeEntries.get(tradeIndex) : null;
 
         if (tradeEntry == null) {
-            // Fallback to vanilla validation for trades without TradeEntry (e.g., Black Market)
+            // Fallback to vanilla validation for trades without TradeEntry
             return executeTradeLegacy(tradeIndex, player, offer);
         }
 
@@ -679,7 +714,7 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         return false;
     }
 
-    // Legacy validation for trades without TradeEntry (Black Market, etc.)
+    // Legacy validation for trades without TradeEntry
     private boolean executeTradeLegacy(int tradeIndex, Player player, MerchantOffer offer) {
         ItemStack costA = offer.getItemCostA().itemStack();
         ItemStack costB = offer.getCostB();
@@ -804,14 +839,14 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
     }
 
     /**
-     * Records a transaction to the ledger for legacy trades (Black Market, etc.)
+     * Records a transaction to the ledger for legacy trades
      */
     private void recordLegacyTransactionToLedger(ServerPlayer player, MerchantOffer offer) {
         if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             net.fit.cobblemonmerchants.ledger.TransactionLedger ledger =
                 net.fit.cobblemonmerchants.ledger.TransactionLedger.get(serverLevel);
 
-            String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "black_market";
+            String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
             String merchantName = merchant.getDisplayName().getString();
 
             // Get input item info

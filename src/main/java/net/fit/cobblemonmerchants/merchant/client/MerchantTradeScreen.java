@@ -87,7 +87,6 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     private void renderTradeItems(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         MerchantOffers offers = menu.getOffers();
         java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries = menu.getTradeEntries();
-        CobblemonMerchants.LOGGER.info("CLIENT: Rendering {} offers", offers.size());
 
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
@@ -99,6 +98,12 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
         // Reserve daily reward position
         if (menu.hasDailyRewardDisplay() && menu.getDailyRewardPosition() >= 0) {
             usedPositions.add(menu.getDailyRewardPosition());
+        }
+
+        // Reserve reset timer clock position
+        int resetTimerPos = menu.getResetTimerPosition();
+        if (resetTimerPos >= 0 && resetTimerPos < TRADES_PER_ROW * MAX_VISIBLE_ROWS) {
+            usedPositions.add(resetTimerPos);
         }
 
         for (int i = 0; i < tradeEntries.size() && i < offers.size(); i++) {
@@ -159,6 +164,62 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
 
         // Render daily reward item if configured
         renderDailyReward(guiGraphics, x, y);
+
+        // Render reset timer clock
+        renderResetTimerClock(guiGraphics, x, y);
+    }
+
+    /**
+     * Renders the reset timer clock at its configured position.
+     * Shows a minecraft clock that displays time until daily reset when hovered.
+     */
+    private void renderResetTimerClock(GuiGraphics guiGraphics, int baseX, int baseY) {
+        int position = menu.getResetTimerPosition();
+        if (position < 0 || position >= TRADES_PER_ROW * MAX_VISIBLE_ROWS) {
+            return;
+        }
+
+        int row = position / TRADES_PER_ROW;
+        int col = position % TRADES_PER_ROW;
+        int slotX = baseX + 8 + col * 18;
+        int slotY = baseY + 18 + row * 18;
+
+        // Render a clock item (non-interactive)
+        ItemStack clockItem = new ItemStack(net.minecraft.world.item.Items.CLOCK);
+        guiGraphics.renderItem(clockItem, slotX, slotY);
+    }
+
+    /**
+     * Checks if the mouse is hovering over the reset timer clock
+     */
+    private boolean isHoveringResetTimerClock(int mouseX, int mouseY) {
+        int position = menu.getResetTimerPosition();
+        if (position < 0 || position >= TRADES_PER_ROW * MAX_VISIBLE_ROWS) {
+            return false;
+        }
+
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+
+        int row = position / TRADES_PER_ROW;
+        int col = position % TRADES_PER_ROW;
+        int slotX = x + 8 + col * 18;
+        int slotY = y + 18 + row * 18;
+
+        return mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16;
+    }
+
+    /**
+     * Creates the tooltip for the reset timer clock
+     */
+    private List<Component> createResetTimerTooltip() {
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(Component.literal("§6Daily Reset Timer"));
+        tooltip.add(Component.empty());
+        tooltip.add(Component.literal("§7Trades reset in: §e" + menu.getTimeUntilReset()));
+        tooltip.add(Component.empty());
+        tooltip.add(Component.literal("§8All daily trades refresh at midnight."));
+        return tooltip;
     }
 
     /**
@@ -225,6 +286,72 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
         }
     }
 
+    /**
+     * Renders animated sparkling glint marks that fade in and out for lucky trades.
+     * Multiple small sparkles appear at different positions with staggered timing.
+     */
+    private void renderSparkleEffect(GuiGraphics guiGraphics, int slotX, int slotY) {
+        // Define sparkle positions relative to slot (x offset, y offset, phase offset)
+        // Positions are spread around the item for a nice sparkling effect
+        float[][] sparkles = {
+            {2, 2, 0.0f},      // Top-left
+            {12, 3, 0.7f},     // Top-right
+            {7, 7, 1.4f},      // Center
+            {3, 12, 2.1f},     // Bottom-left
+            {11, 11, 2.8f},    // Bottom-right
+            {14, 7, 3.5f},     // Right edge
+            {1, 8, 4.2f},      // Left edge
+        };
+
+        // Golden/white sparkle color
+        int sparkleR = 255;
+        int sparkleG = 223;
+        int sparkleB = 120;
+
+        // Push pose and translate z to render on top of items (items render at z ~150)
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0, 0, 200);
+
+        for (float[] sparkle : sparkles) {
+            int offsetX = (int) sparkle[0];
+            int offsetY = (int) sparkle[1];
+            float phaseOffset = sparkle[2];
+
+            // Each sparkle has its own phase for staggered fading
+            // Slower cycle for a more gentle sparkle effect
+            float sparklePhase = ((shimmerTick * 0.08f) + phaseOffset) % (float)(Math.PI * 2);
+
+            // Use sine wave that goes from 0 to 1 and back, with longer "off" periods
+            float rawIntensity = (float) Math.sin(sparklePhase);
+            // Only show sparkle when sine is positive, and boost the visible range
+            float intensity = rawIntensity > 0 ? rawIntensity * rawIntensity : 0; // Square for sharper fade
+
+            if (intensity > 0.05f) {
+                int alpha = (int)(intensity * 220); // Max alpha of 220 for visibility
+                int color = (alpha << 24) | (sparkleR << 16) | (sparkleG << 8) | sparkleB;
+
+                int x = slotX + offsetX;
+                int y = slotY + offsetY;
+
+                // Draw a small cross/plus shape for each sparkle (1px center + 1px arms)
+                // Center pixel
+                guiGraphics.fill(x, y, x + 1, y + 1, color);
+
+                // Only draw arms when intensity is higher (sparkle gets bigger as it brightens)
+                if (intensity > 0.3f) {
+                    // Horizontal arms
+                    guiGraphics.fill(x - 1, y, x, y + 1, color);
+                    guiGraphics.fill(x + 1, y, x + 2, y + 1, color);
+                    // Vertical arms
+                    guiGraphics.fill(x, y - 1, x + 1, y, color);
+                    guiGraphics.fill(x, y + 1, x + 1, y + 2, color);
+                }
+            }
+        }
+
+        guiGraphics.pose().popPose();
+    }
+
     private void renderSingleTrade(GuiGraphics guiGraphics, MerchantOffer offer,
                                    net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry entry,
                                    int slotX, int slotY) {
@@ -248,13 +375,17 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
             // Display barrier block for broken trades
             displayItem = new ItemStack(net.minecraft.world.item.Items.BARRIER);
         } else {
-            // For Black Market trades (where result is relic coins), show what the player is trading away
+            // For sell trades (where result is relic coins), show what the player is trading away
             displayItem = getDisplayItem(offer);
         }
 
-        CobblemonMerchants.LOGGER.info("CLIENT: Rendering item {} at ({}, {})", displayItem, slotX, slotY);
         guiGraphics.renderItem(displayItem, slotX, slotY);
         guiGraphics.renderItemDecorations(this.font, displayItem, slotX, slotY);
+
+        // Render sparkle effect for lucky trades (on top of the item)
+        if (entry != null && entry.isLucky() && !isBroken) {
+            renderSparkleEffect(guiGraphics, slotX, slotY);
+        }
 
         // Draw a red X if the trade is out of stock
         if (offer.isOutOfStock()) {
@@ -265,6 +396,13 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
     @Override
     protected void renderTooltip(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
         super.renderTooltip(guiGraphics, mouseX, mouseY);
+
+        // Check if hovering over reset timer clock
+        if (isHoveringResetTimerClock(mouseX, mouseY)) {
+            List<Component> tooltip = createResetTimerTooltip();
+            guiGraphics.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
+            return;
+        }
 
         // Check if hovering over daily reward
         if (isHoveringDailyReward(mouseX, mouseY)) {
@@ -522,6 +660,19 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
             costLine.append(entry.output().getHoverName().getString());
 
             tooltip.add(Component.literal(costLine.toString()));
+
+            // Lucky trade info
+            if (entry.isLucky()) {
+                tooltip.add(Component.empty());
+                tooltip.add(Component.literal("§d§l✦ Lucky Trade!"));
+                tooltip.add(Component.literal("§7This trade has enhanced rewards:"));
+                if (entry.luckyOutputMultiplier() > 1.0) {
+                    tooltip.add(Component.literal("  §a▶ Output: §fx" + String.format("%.1f", entry.luckyOutputMultiplier())));
+                }
+                if (entry.luckyMaxUsesMultiplier() > 1.0) {
+                    tooltip.add(Component.literal("  §a▶ Max Uses: §fx" + String.format("%.1f", entry.luckyMaxUsesMultiplier())));
+                }
+            }
         } else {
             // Fallback to vanilla cost display
             tooltip.add(offer.getResult().getHoverName());
@@ -625,20 +776,20 @@ public class MerchantTradeScreen extends AbstractContainerScreen<MerchantTradeMe
 
     /**
      * Gets the item to display for this offer.
-     * For Black Market trades (result is relic coins), shows the item being traded.
+     * For sell trades (result is relic coins), shows the item being traded.
      * For regular trades, shows the result.
      */
     private ItemStack getDisplayItem(MerchantOffer offer) {
         ItemStack result = offer.getResult();
 
-        // Check if result is relic coins (Black Market trade)
+        // Check if result is relic coins (sell trade)
         net.minecraft.resources.ResourceLocation relicCoinId =
             net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("cobblemon", "relic_coin");
         net.minecraft.world.item.Item relicCoinItem =
             net.minecraft.core.registries.BuiltInRegistries.ITEM.get(relicCoinId);
 
         if (result.getItem() == relicCoinItem) {
-            // This is a Black Market trade - show the item being traded (cost)
+            // This is a sell trade - show the item being traded (cost)
             return offer.getItemCostA().itemStack();
         }
 

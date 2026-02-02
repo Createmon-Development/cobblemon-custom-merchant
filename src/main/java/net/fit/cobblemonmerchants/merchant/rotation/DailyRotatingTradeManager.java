@@ -14,9 +14,13 @@ import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * Manager for daily rotating trades. Handles selection and persistence of daily trade items.
@@ -168,6 +172,138 @@ public class DailyRotatingTradeManager extends SavedData {
     }
 
     /**
+     * Gets all selected trades for a rotating trade config, handling count > 1.
+     * When count > 1, ensures unique items are selected from the pool.
+     *
+     * @param config The rotating trade configuration
+     * @return List of selected trades with their slot IDs and positions
+     */
+    public List<SelectedTradeWithMeta> getSelectedTrades(DailyRotatingTradeConfig config) {
+        checkAndRotate();
+
+        int count = config.getEffectiveCount();
+        List<SelectedTradeWithMeta> results = new ArrayList<>();
+
+        if (count == 1) {
+            // Simple case - just use the existing method
+            SelectedTrade trade = getSelectedTrade(config);
+            if (trade != null) {
+                results.add(new SelectedTradeWithMeta(
+                    trade,
+                    config.slotId(),
+                    config.position()
+                ));
+            }
+            return results;
+        }
+
+        // Multiple items requested - need to ensure uniqueness
+        TradePool pool = config.getPool();
+        if (pool == null) {
+            CobblemonMerchants.LOGGER.warn("Trade pool not found for rotating trade slot '{}': {}",
+                config.slotId(), config.poolId());
+            return results;
+        }
+
+        // Collect already-selected items for uniqueness check
+        Set<String> selectedItemIds = new HashSet<>();
+
+        for (int i = 0; i < count; i++) {
+            String indexedSlotId = config.getSlotIdForIndex(i);
+
+            // Check if we already have a selection for this indexed slot
+            if (selectedTrades.containsKey(indexedSlotId)) {
+                SelectedTrade existing = selectedTrades.get(indexedSlotId);
+                selectedItemIds.add(existing.itemId());
+                results.add(new SelectedTradeWithMeta(
+                    existing,
+                    indexedSlotId,
+                    config.getPositionForIndex(i)
+                ));
+                continue;
+            }
+
+            // Need to select a new unique trade
+            SelectedTrade selected = selectUniqueFromPool(pool, config, indexedSlotId, selectedItemIds);
+            if (selected != null) {
+                selectedItemIds.add(selected.itemId());
+                selectedTrades.put(indexedSlotId, selected);
+                setDirty();
+                results.add(new SelectedTradeWithMeta(
+                    selected,
+                    indexedSlotId,
+                    config.getPositionForIndex(i)
+                ));
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Selects a unique item from the pool that hasn't been selected yet.
+     */
+    private SelectedTrade selectUniqueFromPool(TradePool pool, DailyRotatingTradeConfig config,
+                                                String slotId, Set<String> alreadySelected) {
+        long seed = generateSeed(slotId);
+        Random random = new Random(seed);
+
+        // Try to find a unique item (with reasonable retry limit)
+        int maxAttempts = pool.entries().size() * 3;
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            TradePoolEntry entry = pool.selectRandomEntry(random);
+            if (entry == null) {
+                break;
+            }
+
+            String resolvedItemId = entry.getResolvedItemId(random);
+            if (resolvedItemId == null) {
+                continue;
+            }
+
+            // Check if this item was already selected
+            if (alreadySelected.contains(resolvedItemId)) {
+                // Reseed with attempt number to try different items
+                random = new Random(seed + attempt + 1);
+                continue;
+            }
+
+            // Found a unique item
+            int effectiveInputAmount = entry.getEffectiveInputAmount(random);
+            int effectiveOutputAmount = entry.getEffectiveOutputAmount(random);
+
+            SelectedTrade selected = new SelectedTrade(
+                resolvedItemId,
+                effectiveInputAmount,
+                effectiveOutputAmount,
+                entry.getMaxUsesOrDefault(),
+                entry.displayName().orElse(null),
+                config.poolId()
+            );
+
+            String sourceInfo = entry.isTag() ? " (from tag " + entry.tag().get() + ")" : "";
+            CobblemonMerchants.LOGGER.info("Selected unique daily rotating trade for slot '{}': {}{} (input: {}, output: {}, maxUses: {})",
+                slotId, resolvedItemId, sourceInfo, effectiveInputAmount, effectiveOutputAmount, entry.getMaxUsesOrDefault());
+
+            return selected;
+        }
+
+        // Couldn't find unique item - pool may be too small for requested count
+        CobblemonMerchants.LOGGER.warn("Could not find unique item for slot '{}' from pool '{}' - pool may have fewer items than requested count",
+            slotId, config.poolId());
+        return null;
+    }
+
+    /**
+     * A selected trade with additional metadata for positioning.
+     */
+    public record SelectedTradeWithMeta(
+        SelectedTrade trade,
+        String slotId,
+        java.util.Optional<Integer> position
+    ) {}
+
+    /**
      * Gets the input item ID for a pool.
      *
      * @param poolId The pool resource location string
@@ -179,6 +315,39 @@ public class DailyRotatingTradeManager extends SavedData {
             return pool.inputItem();
         }
         return "cobblemon:relic_coin";
+    }
+
+    /**
+     * Gets the output item ID for a sell pool.
+     *
+     * @param poolId The pool resource location string
+     * @return The output item ID if this is a sell pool, or empty if not a sell pool
+     */
+    public static java.util.Optional<String> getOutputItemForPool(String poolId) {
+        TradePool pool = net.fit.cobblemonmerchants.merchant.config.TradePoolRegistry.getPool(poolId);
+        if (pool != null) {
+            return pool.outputItem();
+        }
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Checks if a pool is a sell pool (has output_item defined).
+     *
+     * @param poolId The pool resource location string
+     * @return true if this is a sell pool
+     */
+    public static boolean isSellPool(String poolId) {
+        TradePool pool = net.fit.cobblemonmerchants.merchant.config.TradePoolRegistry.getPool(poolId);
+        return pool != null && pool.isSellPool();
+    }
+
+    /**
+     * Gets the current rotation counter.
+     * This is used to ensure lucky trade rolls also change when trades are refreshed.
+     */
+    public long getRotationCounter() {
+        return rotationCounter;
     }
 
     /**

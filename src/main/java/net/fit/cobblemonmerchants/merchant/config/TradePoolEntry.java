@@ -1,6 +1,8 @@
 package net.fit.cobblemonmerchants.merchant.config;
 
+import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -29,7 +31,7 @@ import java.util.Random;
  * @param tag Optional item tag (e.g., "c:fishes", "minecraft:flowers") - mutually exclusive with itemId
  * @param inputAmount The base cost in the input currency (used if min/max not specified)
  * @param outputAmount The base output count (used if min/max not specified)
- * @param weight The selection weight (higher = more likely to be selected)
+ * @param weight Optional selection weight (higher = more likely). If not set, uses pool's default_weight.
  * @param inputVariance Optional variance for input cost (e.g., 0.2 means ±20%) - legacy, prefer min/max
  * @param outputVariance Optional variance for output count (e.g., 0.3 means ±30%) - legacy, prefer min/max
  * @param inputMinAmount Optional minimum input amount (inclusive)
@@ -44,7 +46,7 @@ public record TradePoolEntry(
     Optional<String> tag,
     int inputAmount,
     int outputAmount,
-    int weight,
+    Optional<Integer> weight,
     Optional<Double> inputVariance,
     Optional<Double> outputVariance,
     Optional<Integer> inputMinAmount,
@@ -54,23 +56,122 @@ public record TradePoolEntry(
     Optional<Integer> maxUses,
     Optional<String> displayName
 ) {
+    /**
+     * Helper record for parsing flexible amount specifications.
+     * Supports both single int (fixed value) and [min, max] array (range).
+     */
+    public record AmountSpec(int baseAmount, Optional<Integer> min, Optional<Integer> max) {
+        /**
+         * Codec that parses either a single int or a [min, max] array.
+         * - Single int: "input_amount": 20 → baseAmount=20, min/max empty
+         * - Array: "input_amount": [16, 24] → baseAmount=16, min=16, max=24
+         */
+        public static final Codec<AmountSpec> CODEC = Codec.either(
+            Codec.INT,
+            Codec.INT.listOf()
+        ).flatXmap(
+            either -> either.map(
+                // Single int case
+                singleValue -> DataResult.success(new AmountSpec(singleValue, Optional.empty(), Optional.empty())),
+                // Array case
+                list -> {
+                    if (list.size() == 2) {
+                        int minVal = Math.min(list.get(0), list.get(1));
+                        int maxVal = Math.max(list.get(0), list.get(1));
+                        return DataResult.success(new AmountSpec(minVal, Optional.of(minVal), Optional.of(maxVal)));
+                    }
+                    return DataResult.error(() -> "Amount array must have exactly 2 elements [min, max], got " + list.size());
+                }
+            ),
+            // Encoding back to JSON
+            spec -> {
+                if (spec.min.isPresent() && spec.max.isPresent()) {
+                    return DataResult.success(Either.right(List.of(spec.min.get(), spec.max.get())));
+                }
+                return DataResult.success(Either.left(spec.baseAmount));
+            }
+        );
+
+        public static AmountSpec fixed(int value) {
+            return new AmountSpec(value, Optional.empty(), Optional.empty());
+        }
+    }
+
     public static final Codec<TradePoolEntry> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             Codec.STRING.optionalFieldOf("item_id").forGetter(TradePoolEntry::itemId),
             Codec.STRING.optionalFieldOf("tag").forGetter(TradePoolEntry::tag),
-            Codec.INT.optionalFieldOf("input_amount", 1).forGetter(TradePoolEntry::inputAmount),
-            Codec.INT.optionalFieldOf("output_amount", 1).forGetter(TradePoolEntry::outputAmount),
-            Codec.INT.optionalFieldOf("weight", 1).forGetter(TradePoolEntry::weight),
+            AmountSpec.CODEC.optionalFieldOf("input_amount", AmountSpec.fixed(1)).forGetter(TradePoolEntry::getInputAmountSpec),
+            AmountSpec.CODEC.optionalFieldOf("output_amount", AmountSpec.fixed(1)).forGetter(TradePoolEntry::getOutputAmountSpec),
+            Codec.INT.optionalFieldOf("weight").forGetter(TradePoolEntry::weight),
             Codec.DOUBLE.optionalFieldOf("input_variance").forGetter(TradePoolEntry::inputVariance),
             Codec.DOUBLE.optionalFieldOf("output_variance").forGetter(TradePoolEntry::outputVariance),
-            Codec.INT.optionalFieldOf("input_min_amount").forGetter(TradePoolEntry::inputMinAmount),
-            Codec.INT.optionalFieldOf("input_max_amount").forGetter(TradePoolEntry::inputMaxAmount),
-            Codec.INT.optionalFieldOf("output_min_amount").forGetter(TradePoolEntry::outputMinAmount),
-            Codec.INT.optionalFieldOf("output_max_amount").forGetter(TradePoolEntry::outputMaxAmount),
             Codec.INT.optionalFieldOf("max_uses").forGetter(TradePoolEntry::maxUses),
             Codec.STRING.optionalFieldOf("display_name").forGetter(TradePoolEntry::displayName)
-        ).apply(instance, TradePoolEntry::new)
+        ).apply(instance, TradePoolEntry::fromCodec)
     );
+
+    /**
+     * Factory method used by codec to construct TradePoolEntry from parsed AmountSpecs.
+     */
+    private static TradePoolEntry fromCodec(
+            Optional<String> itemId,
+            Optional<String> tag,
+            AmountSpec inputSpec,
+            AmountSpec outputSpec,
+            Optional<Integer> weight,
+            Optional<Double> inputVariance,
+            Optional<Double> outputVariance,
+            Optional<Integer> maxUses,
+            Optional<String> displayName
+    ) {
+        return new TradePoolEntry(
+            itemId,
+            tag,
+            inputSpec.baseAmount(),
+            outputSpec.baseAmount(),
+            weight,
+            inputVariance,
+            outputVariance,
+            inputSpec.min(),
+            inputSpec.max(),
+            outputSpec.min(),
+            outputSpec.max(),
+            maxUses,
+            displayName
+        );
+    }
+
+    /**
+     * Gets the effective weight for this entry.
+     * Returns the entry's weight if specified, otherwise returns the provided default.
+     *
+     * @param defaultWeight The default weight to use if not specified on the entry
+     * @return The effective weight
+     */
+    public int getEffectiveWeight(int defaultWeight) {
+        return weight.orElse(defaultWeight);
+    }
+
+    /**
+     * Reconstructs the input AmountSpec for codec encoding.
+     */
+    private AmountSpec getInputAmountSpec() {
+        if (inputMinAmount.isPresent() && inputMaxAmount.isPresent()) {
+            return new AmountSpec(inputMinAmount.get(), inputMinAmount, inputMaxAmount);
+        }
+        return new AmountSpec(inputAmount, Optional.empty(), Optional.empty());
+    }
+
+    /**
+     * Reconstructs the output AmountSpec for codec encoding.
+     */
+    private AmountSpec getOutputAmountSpec() {
+        if (outputMinAmount.isPresent() && outputMaxAmount.isPresent()) {
+            return new AmountSpec(outputMinAmount.get(), outputMinAmount, outputMaxAmount);
+        }
+        return new AmountSpec(outputAmount, Optional.empty(), Optional.empty());
+    }
 
     /**
      * Checks if this entry uses a tag instead of a specific item ID.

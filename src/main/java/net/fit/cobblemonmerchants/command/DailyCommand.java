@@ -250,9 +250,13 @@ public class DailyCommand {
                 }
 
                 // Get the slot IDs for this merchant and clear them
+                // Handle count > 1 by including all indexed slot IDs (slotId_0, slotId_1, etc.)
                 java.util.List<String> slotIds = new java.util.ArrayList<>();
                 for (var rotatingConfig : config.dailyRotatingTrades().get()) {
-                    slotIds.add(rotatingConfig.slotId());
+                    int count = rotatingConfig.getEffectiveCount();
+                    for (int i = 0; i < count; i++) {
+                        slotIds.add(rotatingConfig.getSlotIdForIndex(i));
+                    }
                 }
 
                 int clearedCount = tradeManager.clearSlots(slotIds);

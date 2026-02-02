@@ -2,6 +2,7 @@
   "display_name": "Gambler",
   "villager_biome": "minecraft:swamp",
   "villager_profession": "minecraft:librarian",
+  "sync_trades": true,
   "trades": [
     {
       "input": {
@@ -157,7 +158,7 @@
         "min_count": 1,
         "max_count": 1,
         "message": "The Gambler hands you a free Pokebox! Come back tomorrow for more.",
-        "display_position": 26
+        "display_position": 25
       },
       "housed": {
         "item": {
@@ -165,9 +166,9 @@
           "count": 1
         },
         "min_count": 1,
-        "max_count": 6,
+        "max_count": 3,
         "message": "The Gambler is feeling generous in their home! Here's %d Pokebox(es)!",
-        "display_position": 26
+        "display_position": 25
       }
     }
   }

@@ -12,10 +12,14 @@ import java.util.Optional;
  *
  * @param poolId The resource location of the trade pool to select from
  *               (e.g., "cobblemoncustommerchants:rare_items")
- * @param position Optional fixed position in the trade GUI (0-26 for chest GUI)
+ * @param position Optional fixed position in the trade GUI (0-26 for chest GUI).
+ *                 When count > 1, this is the starting position and items are placed sequentially.
  * @param slotId Unique identifier for this rotating slot within the merchant.
  *               Used to track which item was selected for today.
  *               Different merchants can share the same slotId to offer the same daily item.
+ *               When count > 1, slot IDs are generated as slotId_0, slotId_1, etc.
+ * @param count Number of unique items to select from the pool (default 1).
+ *              Items are guaranteed to be unique within the same slot group.
  * @param variants Optional list of variant names this trade applies to.
  *                 If empty/not specified, trade applies to all variants.
  *                 If specified, trade only shows for merchants with matching variant.
@@ -31,6 +35,7 @@ public record DailyRotatingTradeConfig(
     String poolId,
     Optional<Integer> position,
     String slotId,
+    int count,
     Optional<List<String>> variants,
     Optional<String> tradeType,
     Optional<String> customInput,
@@ -50,6 +55,7 @@ public record DailyRotatingTradeConfig(
             Codec.STRING.fieldOf("pool").forGetter(DailyRotatingTradeConfig::poolId),
             Codec.INT.optionalFieldOf("position").forGetter(DailyRotatingTradeConfig::position),
             Codec.STRING.fieldOf("slot_id").forGetter(DailyRotatingTradeConfig::slotId),
+            Codec.INT.optionalFieldOf("count", 1).forGetter(DailyRotatingTradeConfig::count),
             Codec.STRING.listOf().optionalFieldOf("variants").forGetter(DailyRotatingTradeConfig::variants),
             Codec.STRING.optionalFieldOf("trade_type").forGetter(DailyRotatingTradeConfig::tradeType),
             Codec.STRING.optionalFieldOf("custom_input").forGetter(DailyRotatingTradeConfig::customInput),
@@ -119,5 +125,40 @@ public record DailyRotatingTradeConfig(
      */
     public boolean isPoolItemInput() {
         return TYPE_SELL.equals(getEffectiveTradeType());
+    }
+
+    /**
+     * Gets the effective count, ensuring it's at least 1.
+     *
+     * @return The number of items to select from the pool
+     */
+    public int getEffectiveCount() {
+        return Math.max(1, count);
+    }
+
+    /**
+     * Gets the slot ID for a specific index within the count.
+     * For count=1, returns the base slotId.
+     * For count>1, returns slotId_0, slotId_1, etc.
+     *
+     * @param index The index (0 to count-1)
+     * @return The slot ID for this index
+     */
+    public String getSlotIdForIndex(int index) {
+        if (getEffectiveCount() == 1) {
+            return slotId;
+        }
+        return slotId + "_" + index;
+    }
+
+    /**
+     * Gets the position for a specific index within the count.
+     * Returns the base position + index, or empty if no position specified.
+     *
+     * @param index The index (0 to count-1)
+     * @return The position for this index, or empty if not specified
+     */
+    public Optional<Integer> getPositionForIndex(int index) {
+        return position.map(p -> p + index);
     }
 }

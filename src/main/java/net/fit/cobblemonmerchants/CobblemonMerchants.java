@@ -52,21 +52,6 @@ public class CobblemonMerchants {
     }
 
     @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {
-        LOGGER.info("===== SERVER STARTING - BLACK MARKET INITIALIZATION =====");
-        // Initialize the Black Market drop registry when server starts
-        // This parses all Cobblemon species and builds the drop data
-        try {
-            net.fit.cobblemonmerchants.merchant.blackmarket.CobblemonDropRegistry.initialize();
-            LOGGER.info("Initialized Black Market drop registry");
-        } catch (Exception e) {
-            LOGGER.error("Failed to initialize Black Market drop registry", e);
-        }
-
-        LOGGER.info("===== BLACK MARKET INITIALIZATION COMPLETE =====");
-    }
-
-    @SubscribeEvent
     public void onAddReloadListener(AddReloadListenerEvent event) {
         // Register trade pool reload listener (must be before merchant config to be available)
         event.addListener(net.fit.cobblemonmerchants.merchant.config.TradePoolRegistry.getInstance());
@@ -115,12 +100,11 @@ public class CobblemonMerchants {
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
         net.fit.cobblemonmerchants.command.SpawnMerchantCommand.register(event.getDispatcher());
-        net.fit.cobblemonmerchants.command.RefreshBlackMarketCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.ResetDailyRewardsCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.DailyCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.ledger.LedgerCommand.register(event.getDispatcher());
         net.fit.cobblemonmerchants.command.NPCTeleportCommand.register(event.getDispatcher());
-        LOGGER.info("Registered commands: /spawncm, /refreshblackmarket, /resetdailyrewards, /daily, /ledger, /npcteleport");
+        LOGGER.info("Registered commands: /spawncm, /resetdailyrewards, /daily, /ledger, /npcteleport");
     }
 
     @SubscribeEvent

@@ -1,6 +1,5 @@
 package net.fit.cobblemonmerchants.merchant;
 
-import net.fit.cobblemonmerchants.merchant.blackmarket.BlackMarketInventory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -36,7 +35,6 @@ import org.jetbrains.annotations.NotNull;
  */
 public class CustomMerchantEntity extends Villager {
     private static final String TAG_TRADER_ID = "TraderId";
-    private static final String TAG_MERCHANT_TYPE = "MerchantType";
     private static final String TAG_PLAYER_SKIN_NAME = "PlayerSkinName";
     private static final String TAG_VILLAGER_BIOME = "VillagerBiome";
     private static final String TAG_VILLAGER_PROFESSION = "VillagerProfession";
@@ -47,7 +45,6 @@ public class CustomMerchantEntity extends Villager {
         SynchedEntityData.defineId(CustomMerchantEntity.class, EntityDataSerializers.STRING);
 
     private ResourceLocation traderId;
-    private MerchantType merchantType = MerchantType.REGULAR;
     private MerchantOffers offers = new MerchantOffers();
     private java.util.List<net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry> tradeEntries = new java.util.ArrayList<>();
     private Player tradingPlayer;
@@ -77,14 +74,6 @@ public class CustomMerchantEntity extends Villager {
 
     public ResourceLocation getTraderId() {
         return this.traderId;
-    }
-
-    public void setMerchantType(MerchantType type) {
-        this.merchantType = type;
-    }
-
-    public MerchantType getMerchantType() {
-        return this.merchantType;
     }
 
     public void setPlayerSkinName(String name) {
@@ -171,16 +160,6 @@ public class CustomMerchantEntity extends Villager {
     }
 
     public MerchantOffers getOffers() {
-        // For Black Market merchants, generate dynamic per-player inventory
-        if (this.merchantType == MerchantType.BLACK_MARKET && this.tradingPlayer != null) {
-            if (this.level() instanceof ServerLevel serverLevel) {
-                BlackMarketInventory inventory = BlackMarketInventory.get(serverLevel);
-                return inventory.getOffersForPlayer(
-                    this.tradingPlayer.getUUID(),
-                    serverLevel.getDayTime()
-                );
-            }
-        }
         return this.offers;
     }
 
@@ -211,15 +190,9 @@ public class CustomMerchantEntity extends Villager {
 
     @Override
     public @NotNull InteractionResult mobInteract(@NotNull Player player, @NotNull InteractionHand hand) {
-        // Check if player is holding the debug stick
+        // Check if player is holding the debug stick - let it handle the interaction (pickup/place)
         if (player.getItemInHand(hand).getItem() instanceof net.fit.cobblemonmerchants.item.custom.MerchantDebugStick) {
-            // If sneaking with debug stick on Black Market merchant, allow menu opening for testing
-            if (player.isShiftKeyDown() && this.merchantType == MerchantType.BLACK_MARKET) {
-                // Continue to open the menu below
-            } else {
-                // Otherwise, let the debug stick handle the interaction (pickup/place)
-                return InteractionResult.PASS;
-            }
+            return InteractionResult.PASS;
         }
 
         if (!this.level().isClientSide && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
@@ -318,10 +291,25 @@ public class CustomMerchantEntity extends Villager {
                 if (entry.position().isPresent()) {
                     buf.writeInt(entry.position().get());
                 }
+                // Lucky trade info for client display
+                buf.writeBoolean(entry.isLucky());
+                buf.writeDouble(entry.luckyOutputMultiplier());
+                buf.writeDouble(entry.luckyMaxUsesMultiplier());
             }
 
             // Sync daily reward info to client
             writeDailyRewardInfo(buf, serverPlayer);
+
+            // Sync reset timer position from config
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig config =
+                net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(this.traderId);
+            int resetTimerPosition = config != null ? config.resetTimerPosition()
+                : net.fit.cobblemonmerchants.merchant.config.MerchantConfig.DEFAULT_RESET_TIMER_POSITION;
+            buf.writeInt(resetTimerPosition);
+
+            // Always sync reset timer countdown (even if no daily reward is configured)
+            long millisUntilReset = net.fit.cobblemonmerchants.merchant.rewards.DailyRewardManager.getTimeUntilReset().toMillis();
+            buf.writeLong(millisUntilReset);
         });
     }
 
@@ -495,7 +483,6 @@ public class CustomMerchantEntity extends Villager {
         if (this.traderId != null) {
             tag.putString(TAG_TRADER_ID, this.traderId.toString());
         }
-        tag.putString(TAG_MERCHANT_TYPE, this.merchantType.name());
         tag.putString(TAG_VARIANT, this.variant);
         String skinName = getPlayerSkinName();
         if (!skinName.isEmpty()) {
@@ -505,8 +492,8 @@ public class CustomMerchantEntity extends Villager {
             .resultOrPartial(error -> net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.error("Failed to save villager data: {}", error))
             .ifPresent(data -> tag.put("VillagerData", data));
 
-        // Save offers for regular merchants
-        if (this.merchantType == MerchantType.REGULAR && !this.offers.isEmpty()) {
+        // Save offers
+        if (!this.offers.isEmpty()) {
             ListTag offersList = new ListTag();
             for (MerchantOffer offer : this.offers) {
                 MerchantOffer.CODEC.encodeStart(this.registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), offer)
@@ -530,13 +517,6 @@ public class CustomMerchantEntity extends Villager {
 
         if (tag.contains(TAG_TRADER_ID)) {
             this.traderId = ResourceLocation.parse(tag.getString(TAG_TRADER_ID));
-        }
-        if (tag.contains(TAG_MERCHANT_TYPE)) {
-            try {
-                this.merchantType = MerchantType.valueOf(tag.getString(TAG_MERCHANT_TYPE));
-            } catch (IllegalArgumentException e) {
-                this.merchantType = MerchantType.REGULAR;
-            }
         }
         if (tag.contains(TAG_VARIANT)) {
             this.variant = tag.getString(TAG_VARIANT);
@@ -572,18 +552,18 @@ public class CustomMerchantEntity extends Villager {
 
         // After loading from NBT, refresh trades from config if available
         // This ensures merchants in unloaded chunks get updated when they load
-        if (this.merchantType == MerchantType.REGULAR && this.traderId != null) {
+        if (this.traderId != null) {
             reloadTradesFromConfig();
         }
     }
 
     /**
      * Reloads trades from the config registry, filtering by this merchant's variant.
-     * Only applicable for REGULAR merchants (Black Market generates trades dynamically).
      * Call this after datapack reload to update merchant trades.
+     * Preserves usage counts from previously saved offers.
      */
     public void reloadTradesFromConfig() {
-        if (this.merchantType != MerchantType.REGULAR || this.traderId == null) {
+        if (this.traderId == null) {
             return;
         }
 
@@ -591,13 +571,19 @@ public class CustomMerchantEntity extends Villager {
             net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(this.traderId);
 
         if (config != null) {
+            // Save old offers to preserve usage counts
+            MerchantOffers oldOffers = this.offers;
+
             // Filter trades by this merchant's variant
             this.offers = config.toMerchantOffersForVariant(this.variant);
             this.tradeEntries = new java.util.ArrayList<>(config.getTradesForVariant(this.variant));
 
+            // Restore usage counts from old offers for static trades
+            restoreUsageCounts(oldOffers);
+
             // Add daily rotating trades if configured and on server side
             if (config.dailyRotatingTrades().isPresent() && this.level() instanceof ServerLevel serverLevel) {
-                addDailyRotatingTrades(serverLevel, config.dailyRotatingTrades().get());
+                addDailyRotatingTrades(serverLevel, config.dailyRotatingTrades().get(), config);
             }
 
             net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info("Reloaded {} trades for merchant: {} (variant: {})",
@@ -608,14 +594,111 @@ public class CustomMerchantEntity extends Villager {
     }
 
     /**
+     * Restores usage counts from old offers to new offers by matching trade items.
+     * This preserves player progress on limited-use trades across config reloads.
+     */
+    private void restoreUsageCounts(MerchantOffers oldOffers) {
+        if (oldOffers == null || oldOffers.isEmpty()) {
+            return;
+        }
+
+        int restoredCount = 0;
+        for (MerchantOffer newOffer : this.offers) {
+            for (MerchantOffer oldOffer : oldOffers) {
+                if (offersMatch(newOffer, oldOffer)) {
+                    int oldUses = oldOffer.getUses();
+                    if (oldUses > 0) {
+                        // Set uses on the new offer to match the old one
+                        for (int i = 0; i < oldUses; i++) {
+                            newOffer.increaseUses();
+                        }
+                        restoredCount++;
+                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.debug(
+                            "Restored {} uses for trade: {} -> {}",
+                            oldUses,
+                            newOffer.getItemCostA().itemStack().getItem(),
+                            newOffer.getResult().getItem());
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (restoredCount > 0) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "Restored usage counts for {} trades on merchant: {}",
+                restoredCount, this.traderId);
+        }
+    }
+
+    /**
+     * Checks if two offers represent the same trade by comparing their items and counts.
+     */
+    private boolean offersMatch(MerchantOffer a, MerchantOffer b) {
+        // Compare input items
+        if (!net.minecraft.world.item.ItemStack.isSameItemSameComponents(
+                a.getItemCostA().itemStack(), b.getItemCostA().itemStack())) {
+            return false;
+        }
+        if (a.getItemCostA().itemStack().getCount() != b.getItemCostA().itemStack().getCount()) {
+            return false;
+        }
+
+        // Compare second input if present
+        if (!net.minecraft.world.item.ItemStack.isSameItemSameComponents(a.getCostB(), b.getCostB())) {
+            return false;
+        }
+        if (a.getCostB().getCount() != b.getCostB().getCount()) {
+            return false;
+        }
+
+        // Compare output items
+        if (!net.minecraft.world.item.ItemStack.isSameItemSameComponents(a.getResult(), b.getResult())) {
+            return false;
+        }
+        if (a.getResult().getCount() != b.getResult().getCount()) {
+            return false;
+        }
+
+        // Compare max uses (to distinguish otherwise identical trades)
+        if (a.getMaxUses() != b.getMaxUses()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Adds daily rotating trades to this merchant's offers.
      * These trades are dynamically generated based on the current day and pool configuration.
+     * Supports count > 1 for selecting multiple unique items from a pool.
+     * Applies variant bonuses (extra trades, output multiplier, lucky trades) if configured.
+     *
+     * When sync_trades is false in the merchant config, each merchant entity gets unique:
+     * - Trade selections (different items from pools)
+     * - Lucky trade rolls (independent chance per entity)
+     * - Usage tracking (already per-entity via MerchantOffer)
      */
     private void addDailyRotatingTrades(ServerLevel level,
-            java.util.List<net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig> rotatingConfigs) {
+            java.util.List<net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig> rotatingConfigs,
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig merchantConfig) {
 
         net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager manager =
             net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager.get(level);
+
+        // Get variant bonus if applicable
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig.VariantBonusConfig variantBonus =
+            merchantConfig.getVariantBonus(this.variant);
+
+        // Check if trades are synchronized across all merchants of this type
+        boolean syncTrades = merchantConfig.syncTrades();
+        String entityUuidPrefix = syncTrades ? "" : this.getUUID().toString() + ":";
+
+        if (!syncTrades) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "Merchant '{}' has sync_trades=false, using entity-specific trades (UUID: {})",
+                merchantConfig.displayName(), this.getUUID());
+        }
 
         for (net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig config : rotatingConfigs) {
             // Skip if this rotating trade doesn't apply to this merchant's variant
@@ -624,129 +707,269 @@ public class CustomMerchantEntity extends Villager {
             }
 
             try {
-                var selectedTrade = manager.getSelectedTrade(config);
-                if (selectedTrade == null) {
-                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
-                        "No trade selected for rotating slot '{}' - pool may be invalid", config.slotId());
-                    continue;
-                }
+                // Calculate effective count (base count + extra trades from variant bonus)
+                int baseCount = config.getEffectiveCount();
+                int extraTrades = variantBonus != null ? variantBonus.getExtraTradesForPool(config.poolId()) : 0;
+                int totalCount = baseCount + extraTrades;
 
-                // Determine trade type and build trade accordingly
-                String tradeType = config.getEffectiveTradeType();
-                String poolItemId = selectedTrade.itemId();
-                String defaultInputItemId = net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager
-                    .getInputItemForPool(selectedTrade.poolId());
+                // Create a modified config with the adjusted count and entity-specific slot ID if needed
+                net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig effectiveConfig = config;
+                String effectiveSlotId = entityUuidPrefix + config.slotId();
 
-                String actualInputItemId;
-                String actualOutputItemId;
-                int actualInputAmount;
-                int actualOutputAmount;
-
-                if (config.isFree()) {
-                    // FREE: Pool item is output, no cost
-                    // We'll use a special free trade marker instead of a real input item
-                    actualInputItemId = null; // Marker to use createFreeTradeMarker()
-                    actualInputAmount = 0;
-                    actualOutputItemId = poolItemId;
-                    actualOutputAmount = config.outputCount().orElse(selectedTrade.outputAmount());
-                } else if (config.isPoolItemInput()) {
-                    // SELL: Pool item is input (player sells it), receives output
-                    actualInputItemId = poolItemId;
-                    actualInputAmount = config.inputCount().orElse(selectedTrade.outputAmount()); // Pool entry's output becomes input
-                    actualOutputItemId = config.customOutput().orElse(defaultInputItemId);
-                    actualOutputAmount = config.outputCount().orElse(selectedTrade.inputAmount()); // Pool entry's input becomes output
-                } else {
-                    // BUY (default): Pool item is output, player pays input
-                    actualInputItemId = config.customInput().orElse(defaultInputItemId);
-                    actualInputAmount = config.inputCount().orElse(selectedTrade.inputAmount());
-                    actualOutputItemId = config.customOutput().orElse(poolItemId);
-                    actualOutputAmount = config.outputCount().orElse(selectedTrade.outputAmount());
-                }
-
-                // Create input ItemRequirement
-                net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq;
-                if (config.isFree()) {
-                    // Use special free trade marker
-                    inputReq = net.fit.cobblemonmerchants.merchant.config.ItemRequirement.createFreeTradeMarker();
-                } else {
-                    inputReq = net.fit.cobblemonmerchants.merchant.config.ItemRequirement.fromItemId(
-                        actualInputItemId, actualInputAmount);
-                }
-
-                // Create output ItemStack
-                net.minecraft.world.item.ItemStack outputStack = createItemStackFromId(
-                    actualOutputItemId, actualOutputAmount);
-
-                if (outputStack.isEmpty() && !config.isFree()) {
-                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
-                        "Failed to create output item for rotating trade: {}", actualOutputItemId);
-                    continue;
-                }
-
-                // For free trades, ensure we have valid output
-                if (config.isFree() && outputStack.isEmpty()) {
-                    outputStack = createItemStackFromId(poolItemId, selectedTrade.outputAmount());
-                    if (outputStack.isEmpty()) {
-                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
-                            "Failed to create output item for free rotating trade: {}", poolItemId);
-                        continue;
+                if (extraTrades > 0 || !syncTrades) {
+                    effectiveConfig = new net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig(
+                        config.poolId(),
+                        config.position(),
+                        effectiveSlotId, // Use entity-specific slot ID when sync_trades=false
+                        totalCount,
+                        config.variants(),
+                        config.tradeType(),
+                        config.customInput(),
+                        config.customOutput(),
+                        config.inputCount(),
+                        config.outputCount()
+                    );
+                    if (extraTrades > 0) {
+                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                            "Variant '{}' bonus: adding {} extra trades from pool '{}' (total: {})",
+                            this.variant, extraTrades, config.poolId(), totalCount);
                     }
                 }
 
-                // Create the MerchantOffer
-                MerchantOffer offer;
-                if (config.isFree()) {
-                    // For free trades, use structure_void with count 1 as the visual cost
-                    // The trade execution checks for count 0 in TradeEntry to skip input validation
-                    offer = new MerchantOffer(
-                        new net.minecraft.world.item.trading.ItemCost(net.minecraft.world.item.Items.STRUCTURE_VOID, 1),
-                        outputStack,
-                        selectedTrade.maxUses(),
-                        0, // villagerXp
-                        0.0f // priceMultiplier
-                    );
-                } else {
-                    offer = new MerchantOffer(
-                        inputReq.toItemCostWithCount(actualInputAmount),
-                        outputStack,
-                        selectedTrade.maxUses(),
-                        0, // villagerXp
-                        0.0f // priceMultiplier
-                    );
+                // Get all selected trades for this config (handles count > 1)
+                var selectedTrades = manager.getSelectedTrades(effectiveConfig);
+                if (selectedTrades.isEmpty()) {
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                        "No trades selected for rotating slot '{}' - pool may be invalid or too small for count {}",
+                        effectiveConfig.slotId(), effectiveConfig.getEffectiveCount());
+                    continue;
                 }
 
-                this.offers.add(offer);
+                // Add each selected trade with variant bonuses applied
+                // Each trade gets its own deterministic seed based on date + indexed slot ID + rotation counter
+                // This ensures: 1) each trade has independent lucky chance, 2) same slot ID = same luck across variants
+                // 3) lucky status changes when trades are refreshed (rotation counter increments)
+                // 4) when sync_trades=false, entity UUID is included for unique per-entity results
+                String dateStr = java.time.LocalDate.now(java.time.ZoneId.systemDefault()).toString();
+                long rotationCounter = manager.getRotationCounter();
 
-                // Create a synthetic TradeEntry for client sync
-                net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry syntheticEntry =
-                    new net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry(
-                        inputReq,
-                        java.util.Optional.empty(), // no second input
-                        outputStack,
-                        actualOutputAmount,
-                        selectedTrade.maxUses(),
-                        0, // villagerXp
-                        0.0f, // priceMultiplier
-                        java.util.Optional.ofNullable(selectedTrade.displayName()),
-                        config.position(),
-                        java.util.Optional.empty(), // no variant overrides
-                        true, // daily reset
-                        java.util.Optional.empty(), // no variant filter
-                        java.util.Optional.of(config.slotId()) // slot_id for usage tracking
-                    );
+                int tradeIndex = 0;
+                for (var tradeMeta : selectedTrades) {
+                    // Seed based on the INDEXED slot ID for independent rolls
+                    // When sync_trades=false, the slot ID already includes entity UUID prefix
+                    String seedString = dateStr + ":" + config.poolId() + ":" + tradeMeta.slotId() + ":" + tradeIndex + ":" + rotationCounter + ":lucky";
+                    long luckySeed = seedString.hashCode();
+                    java.util.Random luckyRandom = new java.util.Random(luckySeed);
 
-                this.tradeEntries.add(syntheticEntry);
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "Creating lucky random for trade {}: seedString='{}', seed={}, rotationCounter={}",
+                        tradeIndex, seedString, luckySeed, rotationCounter);
 
-                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-                    "Added daily rotating trade for slot '{}' (type={}): {} x{} for {} x{}, maxUses={}, dailyReset=true",
-                    config.slotId(), tradeType, actualOutputItemId, actualOutputAmount,
-                    actualInputItemId, actualInputAmount, selectedTrade.maxUses());
+                    addSingleRotatingTrade(effectiveConfig, tradeMeta, variantBonus, luckyRandom, baseCount);
+                    tradeIndex++;
+                }
 
             } catch (Exception e) {
                 net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.error(
                     "Failed to add daily rotating trade for slot '{}'", config.slotId(), e);
             }
         }
+
+        // Log summary of lucky trades
+        long luckyCount = this.tradeEntries.stream()
+            .filter(entry -> entry.isLucky())
+            .count();
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "SERVER: Finished adding rotating trades for variant '{}'. Total trades: {}, Lucky trades: {}, syncTrades: {}",
+            this.variant, this.tradeEntries.size(), luckyCount, syncTrades);
+    }
+
+    /**
+     * Adds a single rotating trade to this merchant's offers.
+     * Applies variant bonuses (output multiplier, lucky trades) if configured.
+     *
+     * @param config The rotating trade configuration
+     * @param tradeMeta The selected trade with metadata
+     * @param variantBonus The variant bonus config (may be null)
+     * @param luckyRandom Deterministic random for lucky rolls (seeded by date + slot_id)
+     * @param baseCount The number of base trades (for tracking which trades are extra/variant-specific)
+     */
+    private void addSingleRotatingTrade(
+            net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig config,
+            net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager.SelectedTradeWithMeta tradeMeta,
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig.VariantBonusConfig variantBonus,
+            java.util.Random luckyRandom,
+            int baseCount) {
+
+        var selectedTrade = tradeMeta.trade();
+        String slotId = tradeMeta.slotId();
+        java.util.Optional<Integer> position = tradeMeta.position();
+
+        // Determine trade type and build trade accordingly
+        // Pool-level sell configuration (output_item) takes precedence over config trade_type
+        String poolItemId = selectedTrade.itemId();
+        String defaultInputItemId = net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager
+            .getInputItemForPool(selectedTrade.poolId());
+        boolean isPoolSellType = net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager
+            .isSellPool(selectedTrade.poolId());
+        java.util.Optional<String> poolOutputItem = net.fit.cobblemonmerchants.merchant.rotation.DailyRotatingTradeManager
+            .getOutputItemForPool(selectedTrade.poolId());
+
+        String actualInputItemId;
+        String actualOutputItemId;
+        int actualInputAmount;
+        int actualOutputAmount;
+
+        if (config.isFree()) {
+            // FREE: Pool item is output, no cost
+            actualInputItemId = null;
+            actualInputAmount = 0;
+            actualOutputItemId = poolItemId;
+            actualOutputAmount = config.outputCount().orElse(selectedTrade.outputAmount());
+        } else if (isPoolSellType || config.isPoolItemInput()) {
+            // SELL: Pool item is input (player sells it), receives output
+            // If pool has output_item, use that; otherwise fall back to input_item or custom_output
+            actualInputItemId = poolItemId;
+            actualInputAmount = config.inputCount().orElse(selectedTrade.inputAmount());
+            actualOutputItemId = config.customOutput().orElse(poolOutputItem.orElse(defaultInputItemId));
+            actualOutputAmount = config.outputCount().orElse(selectedTrade.outputAmount());
+        } else {
+            // BUY (default): Pool item is output, player pays input
+            actualInputItemId = config.customInput().orElse(defaultInputItemId);
+            actualInputAmount = config.inputCount().orElse(selectedTrade.inputAmount());
+            actualOutputItemId = config.customOutput().orElse(poolItemId);
+            actualOutputAmount = config.outputCount().orElse(selectedTrade.outputAmount());
+        }
+
+        // Apply variant bonuses
+        int effectiveMaxUses = selectedTrade.maxUses();
+        boolean isLucky = false;
+        String bonusInfo = "";
+
+        if (variantBonus != null) {
+            // Apply base output multiplier from variant bonus
+            actualOutputAmount = variantBonus.applyOutputMultiplier(actualOutputAmount);
+
+            // Check for lucky trade
+            var luckyConfig = variantBonus.luckyTradeConfig();
+
+            // Get the random value BEFORE consuming it, for logging
+            double randomValue = luckyRandom.nextDouble();
+            boolean luckyRoll = randomValue < luckyConfig.chance();
+
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "Lucky trade check for slot '{}': variant={}, luckyEnabled={}, chance={}, randomValue={}, result={}",
+                slotId, this.variant, luckyConfig.isEnabled(), luckyConfig.chance(),
+                String.format("%.4f", randomValue), luckyRoll);
+
+            if (luckyConfig.isEnabled() && luckyRoll) {
+                isLucky = true;
+                // Apply lucky trade multipliers (stacks with variant output multiplier)
+                actualOutputAmount = luckyConfig.applyOutputMultiplier(actualOutputAmount);
+                effectiveMaxUses = luckyConfig.applyMaxUsesMultiplier(effectiveMaxUses);
+                bonusInfo = " [LUCKY: output x" + luckyConfig.outputMultiplier() +
+                    ", maxUses x" + luckyConfig.maxUsesMultiplier() + "]";
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "LUCKY TRADE ROLLED for slot '{}': outputMult={}, maxUsesMult={}",
+                    slotId, luckyConfig.outputMultiplier(), luckyConfig.maxUsesMultiplier());
+            }
+
+            if (variantBonus.outputMultiplier() != 1.0 || isLucky) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "Variant bonus applied to slot '{}': outputMult={}, lucky={}, finalOutput={}",
+                    slotId, variantBonus.outputMultiplier(), isLucky, actualOutputAmount);
+            }
+        } else {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                "No variant bonus for slot '{}': variant='{}' has no bonus config",
+                slotId, this.variant);
+        }
+
+        // Create input ItemRequirement
+        net.fit.cobblemonmerchants.merchant.config.ItemRequirement inputReq;
+        if (config.isFree()) {
+            inputReq = net.fit.cobblemonmerchants.merchant.config.ItemRequirement.createFreeTradeMarker();
+        } else {
+            inputReq = net.fit.cobblemonmerchants.merchant.config.ItemRequirement.fromItemId(
+                actualInputItemId, actualInputAmount);
+        }
+
+        // Create output ItemStack
+        net.minecraft.world.item.ItemStack outputStack = createItemStackFromId(
+            actualOutputItemId, actualOutputAmount);
+
+        if (outputStack.isEmpty() && !config.isFree()) {
+            net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                "Failed to create output item for rotating trade: {}", actualOutputItemId);
+            return;
+        }
+
+        // For free trades, ensure we have valid output
+        if (config.isFree() && outputStack.isEmpty()) {
+            outputStack = createItemStackFromId(poolItemId, selectedTrade.outputAmount());
+            if (outputStack.isEmpty()) {
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.warn(
+                    "Failed to create output item for free rotating trade: {}", poolItemId);
+                return;
+            }
+        }
+
+        // Create the MerchantOffer
+        MerchantOffer offer;
+        if (config.isFree()) {
+            offer = new MerchantOffer(
+                new net.minecraft.world.item.trading.ItemCost(net.minecraft.world.item.Items.STRUCTURE_VOID, 1),
+                outputStack,
+                effectiveMaxUses,
+                0, 0.0f
+            );
+        } else {
+            offer = new MerchantOffer(
+                inputReq.toItemCostWithCount(actualInputAmount),
+                outputStack,
+                effectiveMaxUses,
+                0, 0.0f
+            );
+        }
+
+        this.offers.add(offer);
+
+        // Get lucky trade multipliers for tooltip display
+        double luckyOutputMult = 1.0;
+        double luckyMaxUsesMult = 1.0;
+        if (isLucky && variantBonus != null) {
+            var luckyConfig = variantBonus.luckyTradeConfig();
+            luckyOutputMult = luckyConfig.outputMultiplier();
+            luckyMaxUsesMult = luckyConfig.maxUsesMultiplier();
+        }
+
+        // Create a synthetic TradeEntry for client sync
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry syntheticEntry =
+            new net.fit.cobblemonmerchants.merchant.config.MerchantConfig.TradeEntry(
+                inputReq,
+                java.util.Optional.empty(),
+                outputStack,
+                actualOutputAmount,
+                effectiveMaxUses,
+                0, 0.0f,
+                java.util.Optional.ofNullable(selectedTrade.displayName()),
+                position,
+                java.util.Optional.empty(),
+                true, // daily reset
+                java.util.Optional.empty(),
+                java.util.Optional.of(slotId), // slot_id for usage tracking
+                isLucky, // lucky trade flag
+                luckyOutputMult, // lucky output multiplier for tooltip
+                luckyMaxUsesMult // lucky max uses multiplier for tooltip
+            );
+
+        this.tradeEntries.add(syntheticEntry);
+
+        String effectiveTradeType = config.isFree() ? "free" : (isPoolSellType || config.isPoolItemInput() ? "sell" : "buy");
+        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+            "Added daily rotating trade for slot '{}' (type={}): {} x{} for {} x{}, maxUses={}, dailyReset=true, isLucky={}{}",
+            slotId, effectiveTradeType, actualOutputItemId, actualOutputAmount,
+            actualInputItemId, actualInputAmount, effectiveMaxUses, isLucky, bonusInfo);
     }
 
     /**
@@ -766,18 +989,4 @@ public class CustomMerchantEntity extends Villager {
         }
     }
 
-    /**
-     * Types of merchants supported by CustomMerchantEntity
-     */
-    public enum MerchantType {
-        /**
-         * Regular merchant with static trades defined in JSON files
-         */
-        REGULAR,
-
-        /**
-         * Black Market merchant with dynamic rotating inventory per player
-         */
-        BLACK_MARKET
-    }
 }

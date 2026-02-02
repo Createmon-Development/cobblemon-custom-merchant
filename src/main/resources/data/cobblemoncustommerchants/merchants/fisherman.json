@@ -2,14 +2,8 @@
   "display_name": "Fisherman",
   "villager_biome": "minecraft:jungle",
   "villager_profession": "minecraft:fisherman",
+  "sync_trades": true,
   "daily_rotating_trades": [
-    {
-      "pool": "cobblemoncustommerchants:daily_catch",
-      "slot_id": "fisherman_daily_catch",
-      "position": 26,
-      "trade_type": "sell",
-      "variants": ["housed"]
-    }
   ],
   "trades": [
     {

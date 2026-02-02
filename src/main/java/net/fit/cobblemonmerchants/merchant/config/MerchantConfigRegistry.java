@@ -69,16 +69,6 @@ public class MerchantConfigRegistry extends SimpleJsonResourceReloadListener {
                             varEntry.getKey(), varEntry.getValue().displayPosition());
                     }
                 }
-
-                // Check if this is the black_market config and load its settings
-                if (id.getPath().contains("black_market")) {
-                    if (config.blackMarketConfig().isPresent()) {
-                        net.fit.cobblemonmerchants.merchant.blackmarket.BlackMarketConfig.loadFromData(config.blackMarketConfig().get());
-                        CobblemonMerchants.LOGGER.info("Loaded Black Market configuration from: {}", id);
-                    } else {
-                        CobblemonMerchants.LOGGER.warn("Black Market merchant {} found but missing black_market_config section - using defaults", id);
-                    }
-                }
             } catch (Exception e) {
                 CobblemonMerchants.LOGGER.error("Failed to load merchant config: {}", id, e);
             }

@@ -209,13 +209,6 @@ public class SpawnMerchantCommand {
 
         String profession = overrideProfession != null ? overrideProfession : config.villagerProfession().orElse("none");
         merchant.setVillagerProfession(profession);
-
-        if (merchantTypeId.equals(ResourceLocation.fromNamespaceAndPath("cobblemoncustommerchants", "black_market"))) {
-            merchant.setMerchantType(CustomMerchantEntity.MerchantType.BLACK_MARKET);
-        } else {
-            merchant.setMerchantType(CustomMerchantEntity.MerchantType.REGULAR);
-        }
-
         merchant.setTraderId(merchantTypeId);
 
         if (variant != null && !variant.isEmpty()) {
