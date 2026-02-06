@@ -2,6 +2,7 @@
   "display_name": "Pastry Chef",
   "villager_biome": "minecraft:plains",
   "villager_profession": "minecraft:librarian",
+  "sync_rotating_trades": false,
   "sync_trades": false,
   "daily_rotating_trades": [
     {

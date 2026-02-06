@@ -2,7 +2,8 @@
   "display_name": "Gambler",
   "villager_biome": "minecraft:swamp",
   "villager_profession": "minecraft:librarian",
-  "sync_trades": true,
+  "sync_rotating_trades": false,
+  "sync_trades": false,
   "trades": [
     {
       "input": {

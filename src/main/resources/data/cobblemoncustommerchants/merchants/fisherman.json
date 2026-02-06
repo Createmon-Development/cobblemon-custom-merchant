@@ -2,7 +2,8 @@
   "display_name": "Fisherman",
   "villager_biome": "minecraft:jungle",
   "villager_profession": "minecraft:fisherman",
-  "sync_trades": true,
+  "sync_rotating_trades": false,
+  "sync_trades": false,
   "daily_rotating_trades": [
   ],
   "trades": [
@@ -43,7 +44,8 @@
         "id": "cobblemon:relic_coin",
         "count": 32
       },
-      "max_uses": 1
+      "max_uses": 1,
+      "daily_reset": true
     },
     {
       "input": {

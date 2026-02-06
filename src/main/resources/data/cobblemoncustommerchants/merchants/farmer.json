@@ -2,7 +2,8 @@
   "display_name": "Humble Farmer Merchant",
   "villager_biome": "minecraft:savanna",
   "villager_profession": "minecraft:farmer",
-  "sync_trades": true,
+  "sync_rotating_trades": false,
+  "sync_trades": false,
   "trades": [
     {
       "input": {

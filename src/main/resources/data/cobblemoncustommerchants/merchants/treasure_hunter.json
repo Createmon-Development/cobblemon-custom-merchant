@@ -4,7 +4,8 @@
   "villager_profession": "minecraft:cartographer",
   "action_id": "cobblemoncustommerchants:treasure_hunter_dialogue",
   "action_before_trade": true,
-  "sync_trades": true,
+  "sync_rotating_trades": false,
+  "sync_trades": false,
   "trades": [
     {
       "input": {

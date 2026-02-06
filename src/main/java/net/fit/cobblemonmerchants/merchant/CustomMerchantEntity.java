@@ -674,10 +674,9 @@ public class CustomMerchantEntity extends Villager {
      * Supports count > 1 for selecting multiple unique items from a pool.
      * Applies variant bonuses (extra trades, output multiplier, lucky trades) if configured.
      *
-     * When sync_trades is false in the merchant config, each merchant entity gets unique:
+     * When sync_rotating_trades is false in the merchant config, each merchant entity gets unique:
      * - Trade selections (different items from pools)
      * - Lucky trade rolls (independent chance per entity)
-     * - Usage tracking (already per-entity via MerchantOffer)
      */
     private void addDailyRotatingTrades(ServerLevel level,
             java.util.List<net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig> rotatingConfigs,
@@ -690,13 +689,13 @@ public class CustomMerchantEntity extends Villager {
         net.fit.cobblemonmerchants.merchant.config.MerchantConfig.VariantBonusConfig variantBonus =
             merchantConfig.getVariantBonus(this.variant);
 
-        // Check if trades are synchronized across all merchants of this type
-        boolean syncTrades = merchantConfig.syncTrades();
-        String entityUuidPrefix = syncTrades ? "" : this.getUUID().toString() + ":";
+        // Check if rotating trade selections are synchronized across all merchants of this type
+        boolean syncRotatingTrades = merchantConfig.syncRotatingTrades();
+        String entityUuidPrefix = syncRotatingTrades ? "" : this.getUUID().toString() + ":";
 
-        if (!syncTrades) {
+        if (!syncRotatingTrades) {
             net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-                "Merchant '{}' has sync_trades=false, using entity-specific trades (UUID: {})",
+                "Merchant '{}' has sync_rotating_trades=false, using entity-specific trades (UUID: {})",
                 merchantConfig.displayName(), this.getUUID());
         }
 
@@ -716,11 +715,11 @@ public class CustomMerchantEntity extends Villager {
                 net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig effectiveConfig = config;
                 String effectiveSlotId = entityUuidPrefix + config.slotId();
 
-                if (extraTrades > 0 || !syncTrades) {
+                if (extraTrades > 0 || !syncRotatingTrades) {
                     effectiveConfig = new net.fit.cobblemonmerchants.merchant.config.DailyRotatingTradeConfig(
                         config.poolId(),
                         config.position(),
-                        effectiveSlotId, // Use entity-specific slot ID when sync_trades=false
+                        effectiveSlotId, // Use entity-specific slot ID when sync_rotating_trades=false
                         totalCount,
                         config.variants(),
                         config.tradeType(),
@@ -749,14 +748,14 @@ public class CustomMerchantEntity extends Villager {
                 // Each trade gets its own deterministic seed based on date + indexed slot ID + rotation counter
                 // This ensures: 1) each trade has independent lucky chance, 2) same slot ID = same luck across variants
                 // 3) lucky status changes when trades are refreshed (rotation counter increments)
-                // 4) when sync_trades=false, entity UUID is included for unique per-entity results
+                // 4) when sync_rotating_trades=false, entity UUID is included for unique per-entity results
                 String dateStr = java.time.LocalDate.now(java.time.ZoneId.systemDefault()).toString();
                 long rotationCounter = manager.getRotationCounter();
 
                 int tradeIndex = 0;
                 for (var tradeMeta : selectedTrades) {
                     // Seed based on the INDEXED slot ID for independent rolls
-                    // When sync_trades=false, the slot ID already includes entity UUID prefix
+                    // When sync_rotating_trades=false, the slot ID already includes entity UUID prefix
                     String seedString = dateStr + ":" + config.poolId() + ":" + tradeMeta.slotId() + ":" + tradeIndex + ":" + rotationCounter + ":lucky";
                     long luckySeed = seedString.hashCode();
                     java.util.Random luckyRandom = new java.util.Random(luckySeed);
@@ -780,8 +779,8 @@ public class CustomMerchantEntity extends Villager {
             .filter(entry -> entry.isLucky())
             .count();
         net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-            "SERVER: Finished adding rotating trades for variant '{}'. Total trades: {}, Lucky trades: {}, syncTrades: {}",
-            this.variant, this.tradeEntries.size(), luckyCount, syncTrades);
+            "SERVER: Finished adding rotating trades for variant '{}'. Total trades: {}, Lucky trades: {}, syncRotatingTrades: {}",
+            this.variant, this.tradeEntries.size(), luckyCount, syncRotatingTrades);
     }
 
     /**

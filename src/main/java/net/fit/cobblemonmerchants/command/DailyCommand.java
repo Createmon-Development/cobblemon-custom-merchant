@@ -212,10 +212,16 @@ public class DailyCommand {
                 // Refresh all trades
                 tradeManager.forceRotation();
 
-                // Also clear all slot-based usage records so refreshed trades start fresh
+                // Clear all usage records so refreshed trades start fresh
                 net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
                     net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(level);
                 resetManager.clearAllSlotUsage();
+                resetManager.clearAllDailyUsage();
+
+                // Clear permanent (non-daily-reset) trade usage
+                net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager permanentManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager.get(level);
+                permanentManager.clearAll();
 
                 // Reload all merchant trades to pick up new rotating trades
                 int updatedCount = reloadAllMerchantTrades(source.getServer());
@@ -265,6 +271,12 @@ public class DailyCommand {
                 net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
                     net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(level);
                 resetManager.clearSlotUsage(slotIds);
+                resetManager.clearAllDailyUsage();
+
+                // Clear permanent trade usage for this merchant type
+                net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager permanentManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager.get(level);
+                permanentManager.resetMerchantTypeUsage(merchantId);
 
                 // Reload only merchants of this type
                 int updatedCount = reloadMerchantsByType(source.getServer(), merchantLoc);

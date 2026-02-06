@@ -29,8 +29,10 @@ public record MerchantConfig(
     boolean actionBeforeTrade,
     Optional<Map<String, VariantBonusConfig>> variantBonuses,
     int resetTimerPosition, // Position for the reset timer clock display (default: 26 = bottom right)
-    boolean syncTrades // If true (default), all merchants of this type share the same trade selections.
-                       // If false, each merchant entity has unique rolls, lucky trades, and usage tracking.
+    boolean syncRotatingTrades, // If true (default), all merchants of this type share the same rotating trade selections and lucky rolls.
+                                // If false, each merchant entity has unique rotating trade picks and lucky rolls.
+    boolean syncTrades // Per-player stock sync. If true (default), a player's trade usage is shared across all entities of this type.
+                       // If false, each entity tracks usage independently per player.
 ) {
     public static final int DEFAULT_RESET_TIMER_POSITION = 26;
 
@@ -47,6 +49,7 @@ public record MerchantConfig(
             Codec.BOOL.optionalFieldOf("action_before_trade", false).forGetter(MerchantConfig::actionBeforeTrade),
             Codec.unboundedMap(Codec.STRING, VariantBonusConfig.CODEC).optionalFieldOf("variant_bonuses").forGetter(MerchantConfig::variantBonuses),
             Codec.INT.optionalFieldOf("reset_timer_position", DEFAULT_RESET_TIMER_POSITION).forGetter(MerchantConfig::resetTimerPosition),
+            Codec.BOOL.optionalFieldOf("sync_rotating_trades", true).forGetter(MerchantConfig::syncRotatingTrades),
             Codec.BOOL.optionalFieldOf("sync_trades", true).forGetter(MerchantConfig::syncTrades)
         ).apply(instance, MerchantConfig::new)
     );
@@ -135,6 +138,7 @@ public record MerchantConfig(
     public List<TradeEntry> getTradesForVariant(String variant) {
         return trades.stream()
             .filter(trade -> trade.appliesToVariant(variant))
+            .map(trade -> trade.withVariantApplied(variant))
             .toList();
     }
 
@@ -291,6 +295,38 @@ public record MerchantConfig(
                     maxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
                     variantOverrides, dailyReset, variants, slotId, isLucky, luckyOutputMultiplier, luckyMaxUsesMultiplier))
         );
+
+        /**
+         * Returns a new TradeEntry with variant overrides baked into the base values.
+         * This ensures that input counts, output counts, and max uses reflect the
+         * variant-specific values. Used so that trade entries sent to the client and
+         * used for server-side validation have the correct effective values.
+         *
+         * @param variant The merchant variant (e.g., "default", "housed")
+         * @return A new TradeEntry with overrides applied, or this entry if no overrides exist
+         */
+        public TradeEntry withVariantApplied(String variant) {
+            TradeVariantOverride override = getOverrideForVariant(variant);
+            if (override == null) {
+                return this;
+            }
+
+            int effectiveOutputCount = override.outputCount().orElse(this.outputCount);
+            int effectiveMaxUses = override.maxUses().orElse(this.maxUses);
+
+            ItemRequirement effectiveInput = override.inputCount().isPresent()
+                ? input.withCount(override.inputCount().get()) : input;
+            Optional<ItemRequirement> effectiveSecondInput = override.secondInputCount().isPresent() && secondInput.isPresent()
+                ? Optional.of(secondInput.get().withCount(override.secondInputCount().get())) : secondInput;
+
+            // Create output stack with effective count
+            ItemStack effectiveOutput = output.copy();
+            effectiveOutput.setCount(Math.min(effectiveOutputCount, effectiveOutput.getMaxStackSize()));
+
+            return new TradeEntry(effectiveInput, effectiveSecondInput, effectiveOutput, effectiveOutputCount,
+                effectiveMaxUses, villagerXp, priceMultiplier, tradeDisplayName, position,
+                variantOverrides, dailyReset, variants, slotId, isLucky, luckyOutputMultiplier, luckyMaxUsesMultiplier);
+        }
 
         /**
          * Checks if this trade applies to the given variant.

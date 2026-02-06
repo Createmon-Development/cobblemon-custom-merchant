@@ -2,7 +2,8 @@
   "display_name": "Ticket Master",
   "villager_biome": "minecraft:snow",
   "villager_profession": "minecraft:cartographer",
-  "sync_trades": true,
+  "sync_rotating_trades": false,
+  "sync_trades": false,
   "trades": [
     {
       "input": {

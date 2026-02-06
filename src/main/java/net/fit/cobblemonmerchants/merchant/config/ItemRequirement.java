@@ -250,6 +250,20 @@ public class ItemRequirement {
         }
     }
 
+    /**
+     * Creates a copy of this ItemRequirement with a different count.
+     * Used for applying variant overrides to input counts.
+     */
+    public ItemRequirement withCount(int newCount) {
+        return new ItemRequirement(
+            this.exactItem != null ? this.exactItem.copy() : null,
+            this.tag,
+            newCount,
+            this.displayName,
+            this.ignoreComponents
+        );
+    }
+
     public int getCount() {
         return count;
     }

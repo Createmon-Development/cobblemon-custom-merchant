@@ -210,6 +210,28 @@ public class DailyTradeResetManager extends SavedData {
         }
     }
 
+    /**
+     * Clear all non-slot, non-permanent usage records (today's regular daily trade usage).
+     * Called when /daily reset trades is used to fully reset all trade stock.
+     */
+    public void clearAllDailyUsage() {
+        int clearedCount = 0;
+        var iterator = usageRecords.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            String key = entry.getKey();
+            // Skip slot-based records (handled by clearAllSlotUsage) and permanent records
+            if (!key.contains(":slot:") && !key.contains(":permanent:")) {
+                iterator.remove();
+                clearedCount++;
+            }
+        }
+        if (clearedCount > 0) {
+            setDirty();
+            CobblemonMerchants.LOGGER.info("Cleared {} daily trade usage records", clearedCount);
+        }
+    }
+
     // ===== Permanent one-time trade tracking (e.g., mysterious orb) =====
 
     /**

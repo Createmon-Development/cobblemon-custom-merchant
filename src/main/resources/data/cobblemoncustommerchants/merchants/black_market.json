@@ -2,6 +2,7 @@
   "display_name": "Black Market",
   "villager_biome": "minecraft:swamp",
   "villager_profession": "minecraft:nitwit",
+  "sync_rotating_trades": true,
   "sync_trades": true,
   "daily_rotating_trades": [
     {

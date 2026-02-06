@@ -144,7 +144,7 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         this.merchantId = merchant != null ? merchant.getId() : -1;
         this.tradeEntries = merchant != null ? merchant.getTradeEntries() : new java.util.ArrayList<>();
 
-        // Copy offers and initialize daily reset trade usage based on player's usage
+        // Copy offers and initialize trade usage based on player's per-player tracking
         MerchantOffers originalOffers = merchant != null ? merchant.getOffers() : new MerchantOffers();
         this.offers = new MerchantOffers();
 
@@ -152,54 +152,76 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         String merchantIdStr = merchant != null && merchant.getTraderId() != null
             ? merchant.getTraderId().toString() : "unknown";
 
+        // Look up config for sync_trades setting
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig merchantConfig = null;
+        if (merchant != null && merchant.getTraderId() != null) {
+            merchantConfig = net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(merchant.getTraderId());
+        }
+        boolean syncTrades = merchantConfig != null ? merchantConfig.syncTrades() : true;
+
+        // When sync_trades=false, use entity UUID as the "merchant ID" for per-entity tracking.
+        // This affects both daily-reset and permanent trade usage keys.
+        String trackingMerchantId = syncTrades ? merchantIdStr : "entity:" + (merchant != null ? merchant.getUUID().toString() : "unknown");
+
+        // Get per-player usage managers
+        net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager permanentManager = null;
+        net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager dailyResetManager = null;
+        if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer &&
+            serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            permanentManager = net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager.get(serverLevel);
+            dailyResetManager = net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
+        }
+
         for (int i = 0; i < originalOffers.size(); i++) {
             MerchantOffer original = originalOffers.get(i);
+            boolean isDailyReset = i < tradeEntries.size() && tradeEntries.get(i).dailyReset();
 
-            // Create a copy of the offer
+            // Determine the correct per-player uses for this trade
+            int playerUses = 0;
+
+            if (isDailyReset && dailyResetManager != null) {
+                // Daily reset trades: use DailyTradeResetManager (existing per-player daily system)
+                if (tradeEntries.get(i).slotId().isPresent()) {
+                    String slotId = tradeEntries.get(i).slotId().get();
+                    playerUses = dailyResetManager.getUsesTodayBySlot(player.getUUID(), slotId);
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "SERVER: Initialized daily rotating trade {} (slot={}) with uses={}/{} for player {}",
+                        i, slotId, playerUses, original.getMaxUses(), player.getName().getString());
+                } else {
+                    // Use trackingMerchantId so sync_trades=false uses entity UUID
+                    playerUses = dailyResetManager.getUsesToday(player.getUUID(), trackingMerchantId, i);
+                    net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                        "SERVER: Initialized daily reset trade {} with uses={}/{} for player {} (trackingId={})",
+                        i, playerUses, original.getMaxUses(), player.getName().getString(), trackingMerchantId);
+                }
+            } else if (!isDailyReset && permanentManager != null) {
+                // Non-daily-reset trades: use PermanentTradeUsageManager (per-player persistent)
+                String usageKey;
+                if (syncTrades) {
+                    usageKey = net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager
+                        .buildSharedKey(player.getUUID(), merchantIdStr, i);
+                } else {
+                    usageKey = net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager
+                        .buildEntityKey(player.getUUID(), merchant.getUUID(), i);
+                }
+                playerUses = permanentManager.getUses(usageKey);
+            }
+
+            // Create a copy with per-player uses (not entity-level uses)
             MerchantOffer copy = new MerchantOffer(
                 original.getItemCostA(),
                 original.getItemCostB(),
                 original.getResult().copy(),
-                original.getUses(),
+                playerUses,
                 original.getMaxUses(),
                 original.getXp(),
                 original.getPriceMultiplier(),
                 original.getDemand()
             );
 
-            // For daily reset trades, initialize uses from DailyTradeResetManager
-            if (i < tradeEntries.size() && tradeEntries.get(i).dailyReset()) {
-                if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer &&
-                    serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-                    net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
-                        net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
-
-                    int usesToday;
-                    // Use slot-based tracking if slotId is present (for daily rotating trades)
-                    if (tradeEntries.get(i).slotId().isPresent()) {
-                        String slotId = tradeEntries.get(i).slotId().get();
-                        usesToday = resetManager.getUsesTodayBySlot(player.getUUID(), slotId);
-                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-                            "SERVER: Initialized daily rotating trade {} (slot={}) with uses={}/{} for player {}",
-                            i, slotId, usesToday, copy.getMaxUses(), player.getName().getString());
-                    } else {
-                        usesToday = resetManager.getUsesToday(player.getUUID(), merchantIdStr, i);
-                        net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-                            "SERVER: Initialized daily reset trade {} with uses={}/{} for player {}",
-                            i, usesToday, copy.getMaxUses(), player.getName().getString());
-                    }
-
-                    // Set the uses on the copy to reflect player's daily usage
-                    for (int u = 0; u < usesToday; u++) {
-                        copy.increaseUses();
-                    }
-                }
-            }
-
             // Check for one-time trades (like mysterious orb) and mark as out of stock if already used
             if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                 if (isOneTimeTradeUsed(serverPlayer, copy)) {
-                    // Set uses to max to show as out of stock
                     while (copy.getUses() < copy.getMaxUses()) {
                         copy.increaseUses();
                     }
@@ -405,13 +427,14 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
                         "SERVER: Daily slot trade check - player={}, slotId={}, usesToday={}, maxUses={}, canUse={}",
                         player.getName().getString(), slotId, usesToday, maxUses, canUse);
                 } else {
-                    String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
-                    int usesToday = resetManager.getUsesToday(player.getUUID(), merchantId, tradeIndex);
-                    canUse = resetManager.canUseTrade(player.getUUID(), merchantId, tradeIndex, maxUses);
+                    // Use entity UUID when sync_trades=false for per-entity tracking
+                    String trackingId = getTrackingMerchantId();
+                    int usesToday = resetManager.getUsesToday(player.getUUID(), trackingId, tradeIndex);
+                    canUse = resetManager.canUseTrade(player.getUUID(), trackingId, tradeIndex, maxUses);
 
                     net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
-                        "SERVER: Daily trade check - player={}, merchant={}, trade={}, usesToday={}, maxUses={}, canUse={}",
-                        player.getName().getString(), merchantId, tradeIndex, usesToday, maxUses, canUse);
+                        "SERVER: Daily trade check - player={}, trackingId={}, trade={}, usesToday={}, maxUses={}, canUse={}",
+                        player.getName().getString(), trackingId, tradeIndex, usesToday, maxUses, canUse);
                 }
 
                 if (!canUse) {
@@ -530,20 +553,46 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
             "SERVER: Trade {} uses incremented to {}/{} (dailyReset={})",
             tradeIndex, offer.getUses(), offer.getMaxUses(), tradeEntry.dailyReset());
 
-        // Record daily trade use if enabled (for daily limit checking)
-        if (tradeEntry.dailyReset() && player instanceof ServerPlayer serverPlayer) {
-            if (serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+        // Record usage in the appropriate per-player manager
+        if (player instanceof ServerPlayer serverPlayer &&
+            serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+
+            if (tradeEntry.dailyReset()) {
+                // Daily reset trades: record in DailyTradeResetManager
                 net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager resetManager =
                     net.fit.cobblemonmerchants.merchant.rewards.DailyTradeResetManager.get(serverLevel);
 
-                // Use slot-based tracking if slotId is present (for daily rotating trades)
                 if (tradeEntry.slotId().isPresent()) {
                     String slotId = tradeEntry.slotId().get();
                     resetManager.recordSlotTradeUse(player.getUUID(), slotId);
                 } else {
-                    String merchantId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
-                    resetManager.recordTradeUse(player.getUUID(), merchantId, tradeIndex);
+                    // Use entity UUID when sync_trades=false for per-entity tracking
+                    String trackingId = getTrackingMerchantId();
+                    resetManager.recordTradeUse(player.getUUID(), trackingId, tradeIndex);
                 }
+            } else if (merchant != null) {
+                // Non-daily-reset trades: record in PermanentTradeUsageManager
+                net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager permanentManager =
+                    net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager.get(serverLevel);
+
+                net.fit.cobblemonmerchants.merchant.config.MerchantConfig mConfig = merchant.getTraderId() != null
+                    ? net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(merchant.getTraderId()) : null;
+                boolean mSyncTrades = mConfig != null ? mConfig.syncTrades() : true;
+                String mId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
+
+                String usageKey;
+                if (mSyncTrades) {
+                    usageKey = net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager
+                        .buildSharedKey(player.getUUID(), mId, tradeIndex);
+                } else {
+                    usageKey = net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager
+                        .buildEntityKey(player.getUUID(), merchant.getUUID(), tradeIndex);
+                }
+                permanentManager.recordUse(usageKey);
+
+                net.fit.cobblemonmerchants.CobblemonMerchants.LOGGER.info(
+                    "SERVER: Recorded permanent trade use: key={}, syncTrades={}",
+                    usageKey, mSyncTrades);
             }
         }
 
@@ -794,6 +843,28 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         }
 
         offer.increaseUses();
+
+        // Record usage in PermanentTradeUsageManager for legacy trades (non-daily-reset)
+        if (merchant != null && player instanceof ServerPlayer serverPlayer &&
+            serverPlayer.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager permanentManager =
+                net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager.get(serverLevel);
+
+            net.fit.cobblemonmerchants.merchant.config.MerchantConfig mConfig = merchant.getTraderId() != null
+                ? net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(merchant.getTraderId()) : null;
+            boolean syncTrades = mConfig != null ? mConfig.syncTrades() : true;
+            String mId = merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
+
+            String usageKey;
+            if (syncTrades) {
+                usageKey = net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager
+                    .buildSharedKey(player.getUUID(), mId, tradeIndex);
+            } else {
+                usageKey = net.fit.cobblemonmerchants.merchant.rewards.PermanentTradeUsageManager
+                    .buildEntityKey(player.getUUID(), merchant.getUUID(), tradeIndex);
+            }
+            permanentManager.recordUse(usageKey);
+        }
 
         // Record transaction in ledger for legacy trades
         if (player instanceof ServerPlayer serverPlayer) {
@@ -1063,5 +1134,22 @@ public class MerchantTradeMenu extends AbstractContainerMenu {
         }
         // No coin bag found
         return null;
+    }
+
+    /**
+     * Gets the appropriate merchant ID for trade usage tracking based on sync_trades config.
+     * When sync_trades=true: uses the merchant type ID (shared across all entities of same type)
+     * When sync_trades=false: uses "entity:<entityUUID>" (unique per entity)
+     */
+    private String getTrackingMerchantId() {
+        if (merchant == null) return "unknown";
+        net.fit.cobblemonmerchants.merchant.config.MerchantConfig config = merchant.getTraderId() != null
+            ? net.fit.cobblemonmerchants.merchant.config.MerchantConfigRegistry.getConfig(merchant.getTraderId()) : null;
+        boolean syncTrades = config != null ? config.syncTrades() : true;
+        if (syncTrades) {
+            return merchant.getTraderId() != null ? merchant.getTraderId().toString() : "unknown";
+        } else {
+            return "entity:" + merchant.getUUID().toString();
+        }
     }
 }
